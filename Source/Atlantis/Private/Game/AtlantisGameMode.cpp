@@ -1,8 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "AtlantisGameMode.h"
-#include "AtlantisPlayerController.h"
-#include "AtlantisCharacter.h"
+#include "Game/AtlantisGameMode.h"
+#include "Controller/AtlantisPlayerController.h"
+#include "Character/AtlantisCharacter.h"
 #include "UObject/ConstructorHelpers.h"
 
 AAtlantisGameMode::AAtlantisGameMode()
