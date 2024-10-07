@@ -11,6 +11,10 @@
 #include "InputActionValue.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "../Atlantis.h"
+#include "Kismet/GameplayStatics.h"
+#include "Interface/AtlantisCombatInterface.h"
+#include "GameFramework/HUD.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -47,6 +51,10 @@ void AAtlantisPlayerController::SetupInputComponent()
 		EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Triggered, this, &AAtlantisPlayerController::OnSetDestinationTriggered);
 		EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Completed, this, &AAtlantisPlayerController::OnSetDestinationReleased);
 		EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Canceled, this, &AAtlantisPlayerController::OnSetDestinationReleased);
+
+		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Started, this, &AAtlantisPlayerController::OnEnterCombatStarted);
+		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Completed, this, &AAtlantisPlayerController::OnEnterCombatReleased);
+		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Triggered, this, &AAtlantisPlayerController::OnEnterCombatTriggered);
 	}
 	else
 	{
@@ -98,13 +106,97 @@ void AAtlantisPlayerController::OnSetDestinationReleased()
 	FollowTime = 0.f;
 }
 
-// Triggered every frame when the input is held down
-void AAtlantisPlayerController::OnTouchTriggered()
+void AAtlantisPlayerController::OnEnterCombatTriggered()
 {
-	OnSetDestinationTriggered();
+	// TODO: Modify this so instead of MousePosition, we get Mouse "velocity" projected onto combat plane
+	// Might not even need a plane to trace along. We can use the height of the pawn actor and a plane with a normal of UpVector
+	// Direction is projected onto plane and magnitude is scaled with raw mouse input.
+	// Adds a 'force' to weapon / cursor
+	// How/where is force handled? In Controller or character? Maybe here. 
+	// To start: Weapon/Cursor can have mass, 'friction' (radial and longitudinal?) and such. Make sure to preserve angular momentum, especially when reaching the limits
+	// Later: Resistance at the start of a swing and followthrough in mid swing. "Dampen" zones when sword goes through swing (off to sides of target direction?) 
+	// Control controls some sort of physics object? Probe only? Used to do physics calculations, and tick updates the sword to match position/orientation? Try some stuff!
+
+	APawn* ControlledPawn = GetPawn();
+	const bool bValidAndImplementsCombatInterface = (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>());
+	
+	if (bValidAndImplementsCombatInterface)
+	{
+		TArray<FHitResult> Hits = TArray<FHitResult>();
+		bool bHitSuccessful = false;
+		bHitSuccessful = GetMultiLineHitResultsUnderCursor(ECC_CombatTracePlane, true, Hits);
+
+		if (!Hits.IsEmpty())
+		{
+			for (FHitResult& Hit : Hits)
+			{
+				if (Hit.GetActor() == ControlledPawn) //If Collision hit is with this controller's pawn's combat plane
+				{
+					UE_LOG(LogAtlantis, Display, TEXT("Found a hit!"));
+					IAtlantisCombatInterface::Execute_HandleCombatInput(ControlledPawn, Hit.ImpactPoint);
+					return;
+				}
+			}
+		}
+	}
 }
 
-void AAtlantisPlayerController::OnTouchReleased()
+void AAtlantisPlayerController::OnEnterCombatStarted()
 {
-	OnSetDestinationReleased();
+	bInCombatMode = true;
+	if (GetPawn() && GetPawn()->Implements<UAtlantisCombatInterface>())
+	{
+		IAtlantisCombatInterface::Execute_EnterCombatMode(GetPawn());
+	}
+
+}
+
+void AAtlantisPlayerController::OnEnterCombatReleased()
+{
+	bInCombatMode = false;
+	if (GetPawn() &&  GetPawn()->Implements<UAtlantisCombatInterface>())
+	{
+		IAtlantisCombatInterface::Execute_ExitCombatMode(GetPawn());
+	}
+
+}
+
+bool AAtlantisPlayerController::GetMultiLineHitResultsUnderCursor(ECollisionChannel TraceChannel, bool bTraceComplex, TArray<FHitResult>& HitResults) const
+{
+	ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player);
+	bool bHit = false;
+	if (LocalPlayer && LocalPlayer->ViewportClient)
+	{
+		FVector2D MousePosition;
+		if (LocalPlayer->ViewportClient->GetMousePosition(MousePosition))
+		{
+			bHit = GetMultiLineHitResultsAtScreenPosition(MousePosition, TraceChannel, bTraceComplex, HitResults);
+		}
+	}
+
+	return bHit;
+}
+
+bool AAtlantisPlayerController::GetMultiLineHitResultsAtScreenPosition(const FVector2D ScreenPosition, const ECollisionChannel TraceChannel, bool bTraceComplex, TArray<FHitResult>& HitResults) const
+{
+	FCollisionQueryParams CollisionQueryParams(SCENE_QUERY_STAT(ClickableTrace), bTraceComplex);
+	return GetMultiLineHitResultsAtScreenPosition(ScreenPosition, TraceChannel, CollisionQueryParams, HitResults);
+}
+
+bool AAtlantisPlayerController::GetMultiLineHitResultsAtScreenPosition(const FVector2D ScreenPosition, const ECollisionChannel TraceChannel, const FCollisionQueryParams& CollisionQueryParams, TArray<FHitResult>& HitResults) const
+{
+	// Early out if we clicked on a HUD hitbox
+	if (GetHUD() != NULL && GetHUD()->GetHitBoxAtCoordinates(ScreenPosition, true))
+	{
+		return false;
+	}
+
+	FVector WorldOrigin;
+	FVector WorldDirection;
+	if (UGameplayStatics::DeprojectScreenToWorld(this, ScreenPosition, WorldOrigin, WorldDirection) == true)
+	{
+		return GetWorld()->LineTraceMultiByChannel(HitResults, WorldOrigin, WorldOrigin + WorldDirection * HitResultTraceDistance, TraceChannel, CollisionQueryParams);
+	}
+
+	return false;
 }
