@@ -13,10 +13,9 @@
 #include "Engine/LocalPlayer.h"
 #include "../Atlantis.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Interface/AtlantisCombatInterface.h"
 #include "GameFramework/HUD.h"
-
-DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 AAtlantisPlayerController::AAtlantisPlayerController()
 {
@@ -55,10 +54,12 @@ void AAtlantisPlayerController::SetupInputComponent()
 		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Started, this, &AAtlantisPlayerController::OnEnterCombatStarted);
 		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Completed, this, &AAtlantisPlayerController::OnEnterCombatReleased);
 		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Triggered, this, &AAtlantisPlayerController::OnEnterCombatTriggered);
+
+		EnhancedInputComponent->BindAction(MouseMotionAction, ETriggerEvent::Triggered, this, &AAtlantisPlayerController::OnMouseMotionTriggered);
 	}
 	else
 	{
-		UE_LOG(LogTemplateCharacter, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+		UE_LOG(LogAtlantis, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
 }
 
@@ -117,6 +118,13 @@ void AAtlantisPlayerController::OnEnterCombatTriggered()
 	// Later: Resistance at the start of a swing and followthrough in mid swing. "Dampen" zones when sword goes through swing (off to sides of target direction?) 
 	// Control controls some sort of physics object? Probe only? Used to do physics calculations, and tick updates the sword to match position/orientation? Try some stuff!
 
+	// UKismetMathLibrary::ProjectVectorOnToPlane(MouseMotion, FVector::UpVector);
+
+	//double MouseDeltaX, MouseDeltaY;
+	//GetInputMouseDelta(MouseDeltaX, MouseDeltaY);
+	//UE_LOG(LogAtlantis, Display, TEXT("Mouse: %lf, %lf"), MouseDeltaX, MouseDeltaY);
+	//FVector2D MouseMotion = FVector2D(MouseDeltaX, MouseDeltaY);
+
 	APawn* ControlledPawn = GetPawn();
 	const bool bValidAndImplementsCombatInterface = (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>());
 	
@@ -132,8 +140,7 @@ void AAtlantisPlayerController::OnEnterCombatTriggered()
 			{
 				if (Hit.GetActor() == ControlledPawn) //If Collision hit is with this controller's pawn's combat plane
 				{
-					UE_LOG(LogAtlantis, Display, TEXT("Found a hit!"));
-					IAtlantisCombatInterface::Execute_HandleCombatInput(ControlledPawn, Hit.ImpactPoint);
+					IAtlantisCombatInterface::Execute_HandleCombatInputMouseLocation(ControlledPawn, Hit.ImpactPoint);
 					return;
 				}
 			}
@@ -154,11 +161,66 @@ void AAtlantisPlayerController::OnEnterCombatStarted()
 void AAtlantisPlayerController::OnEnterCombatReleased()
 {
 	bInCombatMode = false;
-	if (GetPawn() &&  GetPawn()->Implements<UAtlantisCombatInterface>())
+	if (GetPawn() && GetPawn()->Implements<UAtlantisCombatInterface>())
 	{
 		IAtlantisCombatInterface::Execute_ExitCombatMode(GetPawn());
 	}
 
+}
+
+void AAtlantisPlayerController::OnMouseMotionTriggered(const FInputActionInstance& Instance)
+{
+	// TODO! Two considerations! 1: Mouse Debug vector not contiguous (not each mouse motion is triggering this... problem?)
+	//							 2: Should Mouse end be where mouse is (start) + Mouse motion, or is where mouse is the end and start is end - motion? (Make debug arrows last longer)
+	//							 3: Mouse positions/mouse motions in viewport coordinates, not pixel coordinates. Also a problem? Scaling up by DPI or whatever might give me contiguous vectors?
+	APawn* ControlledPawn = GetPawn();
+
+	if (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>())
+	{
+		FVector2D MouseMotion = Instance.GetValue().Get<FVector2D>();
+		UE_LOG(LogAtlantis, Display, TEXT("Mouse: %lf, %lf"), MouseMotion.X, MouseMotion.Y);
+
+		// Collapse all this to a function (getting combat data from mouse motion)
+		ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player);
+		bool bHit = false;
+		FVector2D MouseStartPosition;
+		FVector2D MouseEndPosition;
+		
+		if (LocalPlayer && LocalPlayer->ViewportClient)
+		{
+			if (LocalPlayer->ViewportClient->GetMousePosition(MouseStartPosition))
+			{
+				MouseEndPosition = MouseStartPosition + MouseMotion;
+
+				FVector WorldMouseStart, WorldMouseStartDir;
+				FVector WorldMouseEnd, WorldMouseEndDir;
+				if (UGameplayStatics::DeprojectScreenToWorld(this, MouseStartPosition, WorldMouseStart, WorldMouseStartDir) && 
+					UGameplayStatics::DeprojectScreenToWorld(this, MouseEndPosition, WorldMouseEnd, WorldMouseEndDir))
+				{
+					FPlane CombatPlane = IAtlantisCombatInterface::Execute_GetCombatPlane(ControlledPawn);
+					float T; //Unused
+					FVector MouseStartOnCombatPlane, MouseEndOnCombatPlane;
+					UKismetMathLibrary::LinePlaneIntersection(WorldMouseStart, WorldMouseStart + WorldMouseStartDir * HitResultTraceDistance, CombatPlane, T, MouseStartOnCombatPlane);
+					UKismetMathLibrary::LinePlaneIntersection(WorldMouseEnd, WorldMouseEnd + WorldMouseEndDir * HitResultTraceDistance, CombatPlane, T, MouseEndOnCombatPlane);
+
+					UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseStartOnCombatPlane, MouseEndOnCombatPlane, 1.f, FLinearColor::Red, 0.1f, 1.5f);
+				}
+
+			}
+		}
+		/*
+		FVector WorldMouseMotion;
+		FVector WorldDirection; //Not needed for our context (this is direction of ray for a mouse trace, if we were using position, but we're getting mouse motin in world space)
+		
+		if (UGameplayStatics::DeprojectScreenToWorld(this, MouseMotion, WorldMouseMotion, WorldDirection))
+		{
+			FVector MouseMotionOnCombatPlane = UKismetMathLibrary::ProjectVectorOnToPlane(WorldMouseMotion, FVector::UpVector);
+			
+			FVector DebugStart = ControlledPawn->GetActorLocation();
+			DebugStart.Z = MouseMotionOnCombatPlane.Z;
+			UKismetSystemLibrary::DrawDebugArrow(GetWorld(), DebugStart, DebugStart + 25.f * MouseMotionOnCombatPlane, 1.f, FLinearColor::Red, 0.2f, 1.5f);
+		}*/
+	}
 }
 
 bool AAtlantisPlayerController::GetMultiLineHitResultsUnderCursor(ECollisionChannel TraceChannel, bool bTraceComplex, TArray<FHitResult>& HitResults) const

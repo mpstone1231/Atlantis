@@ -24,12 +24,16 @@ public:
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 
+	FORCEINLINE float GetCombatPlaneHeight() const { return CombatPlaneHeight; }
+
 protected:
 
 	/* Combat Interface Beign */
 	virtual void EnterCombatMode_Implementation() override;
 	virtual void ExitCombatMode_Implementation() override;
-	virtual void HandleCombatInput_Implementation(const FVector& MouseLocationOnPlane) override;
+	virtual void HandleCombatInputMouseLocation_Implementation(const FVector& MouseLocationOnPlane) override;
+	virtual void HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationOnPlane) override;
+	virtual FPlane GetCombatPlane_Implementation() override;
 	/* Combat Interface End */
 
 	//TODO: Make Weapon a component of special class with a skeletal mesh that holds properties like mass and such
@@ -39,6 +43,7 @@ protected:
 	// Combat
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float MinSwordDistanceFromBody = 25.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float MaxSwordDistanceFromBody = 100.f;
+	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float CombatPlaneHeight = 50.f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)		TObjectPtr<UStaticMeshComponent> CombatTracePlane;
 
 private:

@@ -82,7 +82,7 @@ void AAtlantisCharacter::ExitCombatMode_Implementation()
 	Weapon->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, FName("weapon_r_socket"));
 }
 
-void AAtlantisCharacter::HandleCombatInput_Implementation(const FVector& MouseLocationOnPlane)
+void AAtlantisCharacter::HandleCombatInputMouseLocation_Implementation(const FVector& MouseLocationOnPlane)
 {
 	// Geometric Housekeeping
 	const FVector ActorLocation = GetActorLocation();
@@ -100,4 +100,13 @@ void AAtlantisCharacter::HandleCombatInput_Implementation(const FVector& MouseLo
 	// Handle Rotation update (hilt points towards player)
 	FRotator RotTowardsPlayer = UKismetMathLibrary::MakeRotFromZX(ActorToMouseDir, FVector::CrossProduct(ActorToMouseDir, FVector::UpVector));// (NewWeaponLocation, ActorLocationOnCombatPlane);
 	Weapon->SetWorldRotation(RotTowardsPlayer);
+}
+
+void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationOnPlane)
+{
+}
+
+FPlane AAtlantisCharacter::GetCombatPlane_Implementation()
+{
+	return FPlane(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), FVector::UpVector);
 }

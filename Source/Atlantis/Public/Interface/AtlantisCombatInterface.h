@@ -25,5 +25,7 @@ public:
 	
 	UFUNCTION(BlueprintNativeEvent) void EnterCombatMode();
 	UFUNCTION(BlueprintNativeEvent) void ExitCombatMode();
-	UFUNCTION(BlueprintNativeEvent) void HandleCombatInput(const FVector& MouseLocationOnPlane);
+	UFUNCTION(BlueprintNativeEvent) void HandleCombatInputMouseLocation(const FVector& MouseLocationOnPlane);
+	UFUNCTION(BlueprintNativeEvent) void HandleCombatInputMouseMotion(const FVector& MouseMotionOnPlane);
+	UFUNCTION(BlueprintNativeEvent) FPlane GetCombatPlane();
 };

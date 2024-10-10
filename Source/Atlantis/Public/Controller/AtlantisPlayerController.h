@@ -11,8 +11,8 @@
 class UNiagaraSystem;
 class UInputMappingContext;
 class UInputAction;
+struct FInputActionInstance;
 
-DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 UCLASS()
 class AAtlantisPlayerController : public APlayerController
@@ -42,6 +42,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
 	UInputAction* EnterCombatClickAction;
 
+	/** Mouse Motion Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	UInputAction* MouseMotionAction;
+
 protected:
 	
 	virtual void SetupInputComponent() override;
@@ -53,13 +57,14 @@ protected:
 	void OnInputStarted();
 	void OnSetDestinationTriggered();
 	void OnSetDestinationReleased();
-	void OnTouchTriggered();
-	void OnTouchReleased();
 
 	/** Input handlers for EnterCombat action. */
 	void OnEnterCombatTriggered();
 	void OnEnterCombatStarted();
 	void OnEnterCombatReleased();
+
+	/** Input handlers for MouseMotion action. */
+	void OnMouseMotionTriggered(const FInputActionInstance& Instance);
 
 	/** Explansions to Player Controller default helper functions */
 	bool GetMultiLineHitResultsUnderCursor(ECollisionChannel TraceChannel, bool bTraceComplex, TArray<FHitResult>& HitResults) const;
