@@ -32,8 +32,14 @@ protected:
 	virtual void EnterCombatMode_Implementation() override;
 	virtual void ExitCombatMode_Implementation() override;
 	virtual void HandleCombatInputMouseLocation_Implementation(const FVector& MouseLocationOnPlane) override;
-	virtual void HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationOnPlane) override;
+	virtual void HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationStart, const FVector2D& TangentialPlaneInput) override;
+	virtual void UpdateCombatGeometery_Implementation() override;
+	virtual FVector GetWeaponRadialAxis_Implementation() override;
+	virtual FVector GetWeaponLatitudinalAxis_Implementation() override;
 	virtual FPlane GetCombatPlane_Implementation() override;
+	virtual FSphere GetCombatSphere_Implementation() override;
+	virtual FPlane DetermineCombatSphereTangentialPlane_Implementation() override;
+	
 	/* Combat Interface End */
 
 	//TODO: Make Weapon a component of special class with a skeletal mesh that holds properties like mass and such
@@ -41,10 +47,24 @@ protected:
 	TObjectPtr<USkeletalMeshComponent> Weapon;
 
 	// Combat
+	UFUNCTION()	void UpdateWeaponPosition(const FVector2D& TangentialInput);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float MinSwordDistanceFromBody = 25.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float MaxSwordDistanceFromBody = 100.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float CombatPlaneHeight = 50.f;
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)		TObjectPtr<UStaticMeshComponent> CombatTracePlane;
+	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float CombatSphereRadius = 200.f;
+	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float InputStrength = 1.f;
+
+	/* Debug */
+	UPROPERTY(EditDefaultsOnly, Category = "Debug")
+	TObjectPtr<UStaticMeshComponent> DebugWeaponMass;
+	FVector WeaponRelativeLocation, WeaponLocation;
+	UPROPERTY(EditAnywhere, Category = "Debug")
+	float DebugArrowPersistTime = 0.f;
+	UPROPERTY(EditAnywhere, Category = "Debug")
+	float DebugArrowLength = 10.f;
+	UPROPERTY(EditAnywhere, Category = "Debug")
+	bool bDrawCombatSphere = false;
 
 private:
 	/** Top down camera */
@@ -54,6 +74,16 @@ private:
 	/** Camera boom positioning the camera above the character */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	class USpringArmComponent* CameraBoom;
+
+	// Consideration... Should all this exist on the Controller? Weapon axes and such, combat sphere data. Can be updated from controlled pawn data when input processed
+	// Fully processed data can passed to player to character
+	FPlane CombatPlane;
+	FSphere CombatSphere;
+
+	FVector WeaponRadialAxis;
+	FVector WeaponLatitudinalAxis;
+
+	void UpdateWeaponTangentialAxes();
 	
 };
 

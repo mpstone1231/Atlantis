@@ -11,6 +11,7 @@
 #include "Materials/Material.h"
 #include "../Atlantis.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Engine/World.h"
 //#include "Components/"
 
@@ -43,13 +44,15 @@ AAtlantisCharacter::AAtlantisCharacter()
 	Weapon->SetupAttachment(GetMesh(), FName("weapon_r_socket"));
 	Weapon->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	// Invisible Combat Trace plane (for mouse to HitTrace for swinging sword)
-	CombatTracePlane = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CombatTracePlane"));
-	CombatTracePlane->SetupAttachment(RootComponent);
-	CombatTracePlane->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	CombatTracePlane->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
-	CombatTracePlane->SetCollisionResponseToChannel(ECC_CombatTracePlane, ECollisionResponse::ECR_Overlap);
-	CombatTracePlane->SetVisibility(false);
+	// Setup Combat Geometry
+	CombatPlane = FPlane(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), FVector::UpVector);
+	CombatSphere = FSphere(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), CombatSphereRadius);
+
+	// Setup debug 
+ 	DebugWeaponMass = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DebugWeaponMass"));
+	DebugWeaponMass->SetupAttachment(GetMesh());
+	DebugWeaponMass->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	WeaponRelativeLocation = -FVector::ForwardVector * CombatSphere.W;
 
 	// Create a camera...
 	TopDownCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("TopDownCamera"));
@@ -64,6 +67,18 @@ AAtlantisCharacter::AAtlantisCharacter()
 void AAtlantisCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+	WeaponLocation = CombatSphere.Center + WeaponRelativeLocation;
+	DebugWeaponMass->SetWorldLocation(WeaponLocation);
+
+	if (bDrawCombatSphere)
+	{
+		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), CombatSphere.Center, CombatSphere.W, 12, FLinearColor::Blue, 0.f, 1.f);
+
+		UKismetSystemLibrary::DrawDebugPlane(GetWorld(), Execute_DetermineCombatSphereTangentialPlane(this), CombatSphere.Center + WeaponRelativeLocation, 20.f, FLinearColor::Green, 0.f);
+	
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * Execute_GetWeaponRadialAxis(this), 5.f, FLinearColor::Red, DebugArrowPersistTime, 2.f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * Execute_GetWeaponLatitudinalAxis(this), 5.f, FLinearColor::Blue, DebugArrowPersistTime, 2.f);
+	}
 }
 
 /***********************************************************************************
@@ -102,11 +117,76 @@ void AAtlantisCharacter::HandleCombatInputMouseLocation_Implementation(const FVe
 	Weapon->SetWorldRotation(RotTowardsPlayer);
 }
 
-void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationOnPlane)
+void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationStart, const FVector2D& TangentialPlaneInput)
 {
+	//UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseLocationStart, MouseLocationStart + TangentialPlaneInput, TangentialPlaneInput.Length(), FLinearColor::Red, DebugArrowPersistTime, TangentialPlaneInput.Length() / 2.f);
+	
+	//Draw Debug arrow on weapon location with input vectors... also, draw axes of tangential/operational plane back in controller?
+	FVector WeaponInput = TangentialPlaneInput.X * WeaponRadialAxis + TangentialPlaneInput.Y * WeaponLatitudinalAxis;
+//	UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + 5.f*WeaponInput, 2.f, FLinearColor(1.f, 0.f, 1.f), 0.f, 3.f);
+
+	UpdateWeaponPosition(TangentialPlaneInput);
+//	UKismetSystemLibrary::DrawDebugSphere(GetWorld(), WeaponLocation, 10.f);
+
+}
+
+void AAtlantisCharacter::UpdateCombatGeometery_Implementation()
+{
+	CombatPlane = FPlane(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), FVector::UpVector);
+	CombatSphere.Center = GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight);
+
+	UpdateWeaponTangentialAxes();
+}
+
+FVector AAtlantisCharacter::GetWeaponRadialAxis_Implementation()
+{
+	return WeaponRadialAxis;
+}
+
+FVector AAtlantisCharacter::GetWeaponLatitudinalAxis_Implementation()
+{
+	return WeaponLatitudinalAxis;
 }
 
 FPlane AAtlantisCharacter::GetCombatPlane_Implementation()
 {
-	return FPlane(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), FVector::UpVector);
+	return CombatPlane;
+}
+
+FSphere AAtlantisCharacter::GetCombatSphere_Implementation()
+{
+	return CombatSphere;
+}
+
+//Determines the plane tangential to the combat sphere at the point of where the weapon resides
+FPlane AAtlantisCharacter::DetermineCombatSphereTangentialPlane_Implementation()
+{
+	FVector TangentNormal = WeaponRelativeLocation.GetSafeNormal();
+	return FPlane(CombatSphere.Center + WeaponRelativeLocation, TangentNormal); //Assumes Debug Weapon Location is ON the sphere
+}
+
+void AAtlantisCharacter::UpdateWeaponPosition(const FVector2D& TangentialInput)
+{
+	// Rotates weapon position on sphere by translating tangential planar input into rotational motion along sphere
+	float ArmLength = CombatSphere.W;
+
+	double RadialArcLength = TangentialInput.X * InputStrength;
+	double LatitudinalArcLength = TangentialInput.Y * InputStrength;
+
+	double RadialEffectAngle = 2.f * PI * RadialArcLength / ArmLength;
+	double LatitudinalEffectAngle = 2.f * PI * LatitudinalArcLength / ArmLength;
+
+	WeaponRelativeLocation = WeaponRelativeLocation.RotateAngleAxisRad(RadialEffectAngle, FVector::UpVector);
+	WeaponRelativeLocation = WeaponRelativeLocation.RotateAngleAxisRad(LatitudinalEffectAngle, WeaponRadialAxis);
+
+	WeaponRelativeLocation *= CombatSphere.W/WeaponRelativeLocation.Length(); //Ensure no drift in length
+	
+}
+
+void AAtlantisCharacter::UpdateWeaponTangentialAxes()
+{
+	//For radial, cross product the DebugWeaponLocation - CombatSphere.center with FVector::UpVector... cross again for 
+	FVector WeaponToSphere = (-WeaponRelativeLocation).GetSafeNormal();
+	WeaponRadialAxis = FVector::CrossProduct(WeaponToSphere, FVector::UpVector);
+	WeaponLatitudinalAxis = FVector::CrossProduct(WeaponRadialAxis, WeaponToSphere);
 }

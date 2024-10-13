@@ -71,6 +71,8 @@ protected:
 	bool GetMultiLineHitResultsAtScreenPosition(const FVector2D ScreenPosition, const ECollisionChannel TraceChannel, bool bTraceComplex, TArray<FHitResult>& HitResults) const;
 	bool GetMultiLineHitResultsAtScreenPosition(const FVector2D ScreenPosition, const ECollisionChannel TraceChannel, const FCollisionQueryParams& CollisionQueryParams, TArray<FHitResult>& HitResults) const;
 
+	
+
 	/** True if the controlled character should navigate to the mouse cursor. */
 	uint32 bMoveToMouseCursor : 1;
 
@@ -78,9 +80,19 @@ protected:
 	bool bInCombatMode = false;
 
 private:
+
+	/* Combat Input */
+	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
+
+
 	FVector CachedDestination;
 
 	float FollowTime; // For how long it has been pressed
+
+	FVector2D PrevMousePosition = FVector2D(-1.f, -1.f);
+	bool bIsStartOfNewMouseMotion = true;
+
+	
 };
 
 
