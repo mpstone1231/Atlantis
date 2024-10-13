@@ -76,8 +76,8 @@ void AAtlantisCharacter::Tick(float DeltaSeconds)
 
 		UKismetSystemLibrary::DrawDebugPlane(GetWorld(), Execute_DetermineCombatSphereTangentialPlane(this), CombatSphere.Center + WeaponRelativeLocation, 20.f, FLinearColor::Green, 0.f);
 	
-		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * Execute_GetWeaponRadialAxis(this), 5.f, FLinearColor::Red, DebugArrowPersistTime, 2.f);
-		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * Execute_GetWeaponLatitudinalAxis(this), 5.f, FLinearColor::Blue, DebugArrowPersistTime, 2.f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponRadialAxis, 5.f, FLinearColor::Red, DebugArrowPersistTime, 2.f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponLatitudinalAxis, 5.f, FLinearColor::Blue, DebugArrowPersistTime, 2.f);
 	}
 }
 
@@ -148,6 +148,16 @@ FVector AAtlantisCharacter::GetWeaponLatitudinalAxis_Implementation()
 	return WeaponLatitudinalAxis;
 }
 
+FVector AAtlantisCharacter::GetWeaponLocation_Implementation()
+{
+	return WeaponLocation;
+}
+
+FPlane AAtlantisCharacter::GetInputPlaneFromCamera_Implementation()
+{
+	return FPlane(GetActorLocation(), -TopDownCameraComponent->GetForwardVector());
+}
+
 FPlane AAtlantisCharacter::GetCombatPlane_Implementation()
 {
 	return CombatPlane;
@@ -177,7 +187,7 @@ void AAtlantisCharacter::UpdateWeaponPosition(const FVector2D& TangentialInput)
 	double LatitudinalEffectAngle = 2.f * PI * LatitudinalArcLength / ArmLength;
 
 	WeaponRelativeLocation = WeaponRelativeLocation.RotateAngleAxisRad(RadialEffectAngle, FVector::UpVector);
-	WeaponRelativeLocation = WeaponRelativeLocation.RotateAngleAxisRad(LatitudinalEffectAngle, WeaponRadialAxis);
+	WeaponRelativeLocation = WeaponRelativeLocation.RotateAngleAxisRad(LatitudinalEffectAngle, FVector::CrossProduct(WeaponLatitudinalAxis, WeaponToCombatOrigin)); //WeaponRadialAxis);
 
 	WeaponRelativeLocation *= CombatSphere.W/WeaponRelativeLocation.Length(); //Ensure no drift in length
 	
@@ -186,7 +196,7 @@ void AAtlantisCharacter::UpdateWeaponPosition(const FVector2D& TangentialInput)
 void AAtlantisCharacter::UpdateWeaponTangentialAxes()
 {
 	//For radial, cross product the DebugWeaponLocation - CombatSphere.center with FVector::UpVector... cross again for 
-	FVector WeaponToSphere = (-WeaponRelativeLocation).GetSafeNormal();
-	WeaponRadialAxis = FVector::CrossProduct(WeaponToSphere, FVector::UpVector);
-	WeaponLatitudinalAxis = FVector::CrossProduct(WeaponRadialAxis, WeaponToSphere);
+	WeaponToCombatOrigin = (-WeaponRelativeLocation).GetSafeNormal();
+	WeaponRadialAxis = FVector::CrossProduct(WeaponToCombatOrigin, FVector::UpVector).GetSafeNormal();//.GetSafeNormal();
+	WeaponLatitudinalAxis = FVector::CrossProduct(WeaponRadialAxis, WeaponToCombatOrigin);//.GetSafeNormal();
 }

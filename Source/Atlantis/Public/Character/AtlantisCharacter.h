@@ -36,6 +36,8 @@ protected:
 	virtual void UpdateCombatGeometery_Implementation() override;
 	virtual FVector GetWeaponRadialAxis_Implementation() override;
 	virtual FVector GetWeaponLatitudinalAxis_Implementation() override;
+	virtual FVector GetWeaponLocation_Implementation() override;
+	virtual FPlane GetInputPlaneFromCamera_Implementation() override;
 	virtual FPlane GetCombatPlane_Implementation() override;
 	virtual FSphere GetCombatSphere_Implementation() override;
 	virtual FPlane DetermineCombatSphereTangentialPlane_Implementation() override;
@@ -82,6 +84,7 @@ private:
 
 	FVector WeaponRadialAxis;
 	FVector WeaponLatitudinalAxis;
+	FVector WeaponToCombatOrigin;
 
 	void UpdateWeaponTangentialAxes();
 	

@@ -30,6 +30,8 @@ public:
 	UFUNCTION(BlueprintNativeEvent) void UpdateCombatGeometery();
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponRadialAxis();
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponLatitudinalAxis();
+	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponLocation();
+	UFUNCTION(BlueprintNativeEvent) FPlane GetInputPlaneFromCamera();
 	UFUNCTION(BlueprintNativeEvent) FPlane GetCombatPlane();
 	UFUNCTION(BlueprintNativeEvent) FSphere GetCombatSphere();
 	UFUNCTION(BlueprintNativeEvent) FPlane DetermineCombatSphereTangentialPlane();

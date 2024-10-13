@@ -65,6 +65,7 @@ protected:
 
 	/** Input handlers for MouseMotion action. */
 	void OnMouseMotionTriggered(const FInputActionInstance& Instance);
+	void OnMouseMotionStopped(const FInputActionInstance& Instance);
 
 	/** Explansions to Player Controller default helper functions */
 	bool GetMultiLineHitResultsUnderCursor(ECollisionChannel TraceChannel, bool bTraceComplex, TArray<FHitResult>& HitResults) const;
@@ -79,20 +80,24 @@ protected:
 	/* Combat */
 	bool bInCombatMode = false;
 
+	UPROPERTY(EditDefaultsOnly)
+	float DisambiguationAlpha = 0.5f;
+
 private:
 
 	/* Combat Input */
-	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
-
+	FPlane DetermineInputPlane(const FVector& InputPlaneOrigin);
+	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FVector& DisambiguatingAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
+	FVector2D BreakMouseInputToInputSpaceComponents(const FVector& PlanarMouseInput, const FVector& RadialAxis, const FVector& LatitudinalAxis, const FVector& PlanarNormal);
 
 	FVector CachedDestination;
 
 	float FollowTime; // For how long it has been pressed
 
+	FVector2D MouseMotion = FVector2D::ZeroVector;
 	FVector2D PrevMousePosition = FVector2D(-1.f, -1.f);
 	bool bIsStartOfNewMouseMotion = true;
 
-	
 };
 
 
