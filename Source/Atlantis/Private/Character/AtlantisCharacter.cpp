@@ -117,15 +117,25 @@ void AAtlantisCharacter::HandleCombatInputMouseLocation_Implementation(const FVe
 	Weapon->SetWorldRotation(RotTowardsPlayer);
 }
 
-void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationStart, const FVector2D& TangentialPlaneInput)
+void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVector& TargetWeaponPosition, const FVector2D& MouseMotion)
 {
+	//TODO: Find out what radial impulse would need to be done to alter momentum such that the weapon ends in the TargetWeaponPosition and apply, keeping track of existing momentum
+	FVector PrevWeaponLocation = WeaponLocation;
+	WeaponLocation = TargetWeaponPosition;
+
+	// TODO: Store linear AND angular momentum to be retrieved by Controller when deciding next target from intersections
+	UpdateWeaponKinematics(PrevWeaponLocation);
+
+
+	
+	 
 	//UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseLocationStart, MouseLocationStart + TangentialPlaneInput, TangentialPlaneInput.Length(), FLinearColor::Red, DebugArrowPersistTime, TangentialPlaneInput.Length() / 2.f);
 	
 	//Draw Debug arrow on weapon location with input vectors... also, draw axes of tangential/operational plane back in controller?
-	FVector WeaponInput = TangentialPlaneInput.X * WeaponRadialAxis + TangentialPlaneInput.Y * WeaponLatitudinalAxis;
+//	FVector WeaponInput = TangentialPlaneInput.X * WeaponRadialAxis + TangentialPlaneInput.Y * WeaponLatitudinalAxis;
 //	UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + 5.f*WeaponInput, 2.f, FLinearColor(1.f, 0.f, 1.f), 0.f, 3.f);
 
-	UpdateWeaponPosition(TangentialPlaneInput);
+//	UpdateWeaponPosition(TangentialPlaneInput);
 //	UKismetSystemLibrary::DrawDebugSphere(GetWorld(), WeaponLocation, 10.f);
 
 }
@@ -153,9 +163,14 @@ FVector AAtlantisCharacter::GetWeaponLocation_Implementation()
 	return WeaponLocation;
 }
 
+FVector AAtlantisCharacter::GetWeaponAngularMomentum_Implementation()
+{
+	return WeaponLinearMomentum;
+}
+
 FPlane AAtlantisCharacter::GetInputPlaneFromCamera_Implementation()
 {
-	return FPlane(GetActorLocation(), -TopDownCameraComponent->GetForwardVector());
+	return FPlane(CombatSphere.Center, -TopDownCameraComponent->GetForwardVector());
 }
 
 FPlane AAtlantisCharacter::GetCombatPlane_Implementation()
@@ -199,4 +214,33 @@ void AAtlantisCharacter::UpdateWeaponTangentialAxes()
 	WeaponToCombatOrigin = (-WeaponRelativeLocation).GetSafeNormal();
 	WeaponRadialAxis = FVector::CrossProduct(WeaponToCombatOrigin, FVector::UpVector).GetSafeNormal();//.GetSafeNormal();
 	WeaponLatitudinalAxis = FVector::CrossProduct(WeaponRadialAxis, WeaponToCombatOrigin);//.GetSafeNormal();
+}
+
+void AAtlantisCharacter::UpdateWeaponKinematics(const FVector& PreviousWeaponLocation)
+{
+	// IMPORTANT NOTE! Not really getting "velocities" without delta time...
+	// These are ROUGH approximations of kinematics and should be taken as such...
+	// Also, I'm assuming Linear momentum is tangential to the combat sphere, but what if mouse goes off? Can Sword go inside sphere based on target position? Can it go outside?
+	// Should I consider the tangential component and velocity in and out of the sphere?
+	
+	// Also, if I'm getting the kinematics in one way here, and applying the same in reverse in the controller, I should make a pair
+	// of math helpers that are CONSISTENT so I don't get weird stuff going on.
+
+	FVector ToWeapon = WeaponLocation - CombatSphere.Center;
+	FVector ToPrevWeapon = PreviousWeaponLocation - CombatSphere.Center;
+	
+	if ((ToWeapon - ToPrevWeapon).IsNearlyZero())
+	{
+		WeaponAngularMomentum = FVector::ZeroVector;
+		WeaponLinearMomentum = FVector::ZeroVector;
+		return;
+	}
+
+	float AngularRotationAngle = FQuat::FindBetweenVectors(ToPrevWeapon, ToWeapon).GetAngle();
+	
+	FVector RotationalAxis = FVector::CrossProduct(ToPrevWeapon, ToWeapon).GetSafeNormal();
+	FVector LinearMotionAxis = FVector::CrossProduct(RotationalAxis, ToWeapon).GetSafeNormal();
+
+	WeaponAngularMomentum = RotationalAxis * AngularRotationAngle;
+	WeaponLinearMomentum = LinearMotionAxis * AngularRotationAngle;
 }

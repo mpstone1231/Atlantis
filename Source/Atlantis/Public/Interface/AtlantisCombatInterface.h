@@ -26,11 +26,12 @@ public:
 	UFUNCTION(BlueprintNativeEvent) void EnterCombatMode();
 	UFUNCTION(BlueprintNativeEvent) void ExitCombatMode();
 	UFUNCTION(BlueprintNativeEvent) void HandleCombatInputMouseLocation(const FVector& MouseLocationOnPlane);
-	UFUNCTION(BlueprintNativeEvent) void HandleCombatInputMouseMotion(const FVector& MouseLocationStart, const FVector2D& TangentialPlaneInput);
+	UFUNCTION(BlueprintNativeEvent) void HandleCombatInputMouseMotion(const FVector& TargetWeaponPosition, const FVector2D& MouseMotion);
 	UFUNCTION(BlueprintNativeEvent) void UpdateCombatGeometery();
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponRadialAxis();
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponLatitudinalAxis();
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponLocation();
+	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponAngularMomentum();
 	UFUNCTION(BlueprintNativeEvent) FPlane GetInputPlaneFromCamera();
 	UFUNCTION(BlueprintNativeEvent) FPlane GetCombatPlane();
 	UFUNCTION(BlueprintNativeEvent) FSphere GetCombatSphere();

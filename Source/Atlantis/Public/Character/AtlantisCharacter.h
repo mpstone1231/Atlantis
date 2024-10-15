@@ -32,11 +32,12 @@ protected:
 	virtual void EnterCombatMode_Implementation() override;
 	virtual void ExitCombatMode_Implementation() override;
 	virtual void HandleCombatInputMouseLocation_Implementation(const FVector& MouseLocationOnPlane) override;
-	virtual void HandleCombatInputMouseMotion_Implementation(const FVector& MouseLocationStart, const FVector2D& TangentialPlaneInput) override;
+	virtual void HandleCombatInputMouseMotion_Implementation(const FVector& TargetWeaponPosition, const FVector2D& MouseMotion) override;
 	virtual void UpdateCombatGeometery_Implementation() override;
 	virtual FVector GetWeaponRadialAxis_Implementation() override;
 	virtual FVector GetWeaponLatitudinalAxis_Implementation() override;
 	virtual FVector GetWeaponLocation_Implementation() override;
+	virtual FVector GetWeaponAngularMomentum_Implementation() override;
 	virtual FPlane GetInputPlaneFromCamera_Implementation() override;
 	virtual FPlane GetCombatPlane_Implementation() override;
 	virtual FSphere GetCombatSphere_Implementation() override;
@@ -56,6 +57,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float CombatPlaneHeight = 50.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float CombatSphereRadius = 200.f;
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")	float InputStrength = 1.f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat|Kinematics")	FVector WeaponAngularMomentum;
+	UPROPERTY(BlueprintReadOnly, Category = "Combat|Kinematics")	FVector WeaponLinearMomentum;
 
 	/* Debug */
 	UPROPERTY(EditDefaultsOnly, Category = "Debug")
@@ -87,6 +91,7 @@ private:
 	FVector WeaponToCombatOrigin;
 
 	void UpdateWeaponTangentialAxes();
+	void UpdateWeaponKinematics(const FVector& PreviousWeaponLocation);
 	
 };
 
