@@ -13,7 +13,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/World.h"
-//#include "Components/"
+#include "Libraries/MathHelperLibrary.h"
 
 AAtlantisCharacter::AAtlantisCharacter()
 {
@@ -67,10 +67,10 @@ AAtlantisCharacter::AAtlantisCharacter()
 void AAtlantisCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-	WeaponLocation = CombatSphere.Center + WeaponRelativeLocation;
+	//WeaponLocation = CombatSphere.Center + WeaponRelativeLocation;
 	DebugWeaponMass->SetWorldLocation(WeaponLocation);
 
-	if (bDrawCombatSphere)
+	if (bDrawDebug)
 	{
 		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), CombatSphere.Center, CombatSphere.W, 12, FLinearColor::Blue, 0.f, 1.f);
 
@@ -78,6 +78,12 @@ void AAtlantisCharacter::Tick(float DeltaSeconds)
 	
 		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponRadialAxis, 5.f, FLinearColor::Red, DebugArrowPersistTime, 2.f);
 		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponLatitudinalAxis, 5.f, FLinearColor::Blue, DebugArrowPersistTime, 2.f);
+
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), CombatSphere.Center, CombatSphere.Center + DebugArrowLength * WeaponAngularMomentum, 5.f, FLinearColor::Green, DebugArrowPersistTime, 2.f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponLinearMomentum, 5.f, FLinearColor::Black, DebugArrowPersistTime, 2.f);
+	
+		const FVector PredictedWeaponLocation = UMathHelperLibrary::ExtrapolateNewPointFromAngularMomentum(CombatSphere.Center, WeaponLocation, WeaponAngularMomentum);
+		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), PredictedWeaponLocation, 20.f, 12, FLinearColor(1.f, 0.f, 1.f), 0.f, 1.f);
 	}
 }
 
@@ -126,9 +132,6 @@ void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVect
 	// TODO: Store linear AND angular momentum to be retrieved by Controller when deciding next target from intersections
 	UpdateWeaponKinematics(PrevWeaponLocation);
 
-
-	
-	 
 	//UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseLocationStart, MouseLocationStart + TangentialPlaneInput, TangentialPlaneInput.Length(), FLinearColor::Red, DebugArrowPersistTime, TangentialPlaneInput.Length() / 2.f);
 	
 	//Draw Debug arrow on weapon location with input vectors... also, draw axes of tangential/operational plane back in controller?
@@ -226,21 +229,11 @@ void AAtlantisCharacter::UpdateWeaponKinematics(const FVector& PreviousWeaponLoc
 	// Also, if I'm getting the kinematics in one way here, and applying the same in reverse in the controller, I should make a pair
 	// of math helpers that are CONSISTENT so I don't get weird stuff going on.
 
+	
+
 	FVector ToWeapon = WeaponLocation - CombatSphere.Center;
 	FVector ToPrevWeapon = PreviousWeaponLocation - CombatSphere.Center;
-	
-	if ((ToWeapon - ToPrevWeapon).IsNearlyZero())
-	{
-		WeaponAngularMomentum = FVector::ZeroVector;
-		WeaponLinearMomentum = FVector::ZeroVector;
-		return;
-	}
 
-	float AngularRotationAngle = FQuat::FindBetweenVectors(ToPrevWeapon, ToWeapon).GetAngle();
+	UMathHelperLibrary::DetermineAngularAndLinearMomentumBetweenTwoPoints(ToPrevWeapon, ToWeapon, WeaponAngularMomentum, WeaponLinearMomentum);
 	
-	FVector RotationalAxis = FVector::CrossProduct(ToPrevWeapon, ToWeapon).GetSafeNormal();
-	FVector LinearMotionAxis = FVector::CrossProduct(RotationalAxis, ToWeapon).GetSafeNormal();
-
-	WeaponAngularMomentum = RotationalAxis * AngularRotationAngle;
-	WeaponLinearMomentum = LinearMotionAxis * AngularRotationAngle;
 }

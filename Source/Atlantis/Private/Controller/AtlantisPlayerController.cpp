@@ -135,9 +135,10 @@ void AAtlantisPlayerController::OnEnterCombatTriggered()
 				double T1, T2;
 				if (UMathHelperLibrary::LineSphereIntersection(WorldMouseLocation, WorldMouseDir, CombatSphere, MouseOnSphereClose, MouseOnSphereFar, T1, T2))
 				{
-					FindBestSphereIntersectionAsInput();
+					const FVector WeaponAngularMomentum = IAtlantisCombatInterface::Execute_GetWeaponAngularMomentum(ControlledPawn);
+					TargetWeaponLocation = FindBestSphereIntersectionAsInput(ControlledPawn, CombatSphere, WeaponPosition, WeaponAngularMomentum, MouseOnSphereClose, MouseOnSphereFar);
 					
-					UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
+					if (bDrawDebug) UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
 					//UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnSphereFar, 20.f, 12, FLinearColor::Green, 0.f, 1.f);
 				}
 				else
@@ -155,8 +156,12 @@ void AAtlantisPlayerController::OnEnterCombatTriggered()
 					if (UKismetMathLibrary::LinePlaneIntersection(WorldMouseLocation, WorldMouseLocation + WorldMouseDir * HitResultTraceDistance, InputPlane, T_Unused, MouseOnCombatPlane))
 					{
 						TargetWeaponLocation = CombatSphere.Center + (MouseOnCombatPlane - CombatSphere.Center).GetUnsafeNormal() * CombatSphere.W;
-						UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnCombatPlane, 20.f, 12, FLinearColor::Yellow, 0.f, 1.f);
-						UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
+
+						if (bDrawDebug)
+						{
+							UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnCombatPlane, 20.f, 12, FLinearColor::Yellow, 0.f, 1.f);
+							UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
+						}
 					}
 				}
 
@@ -488,20 +493,22 @@ FVector2D AAtlantisPlayerController::BreakMouseInputToInputSpaceComponents(const
 
 }
 
-FVector AAtlantisPlayerController::FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FSphere& CombatSphere, const FVector& WeaponPosition, const FVector& IntersectionClose, const FVector& IntersectionFar)
+FVector AAtlantisPlayerController::FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FSphere& CombatSphere, const FVector& WeaponPosition, const FVector& WeaponAngularMomentum, const FVector& IntersectionClose, const FVector& IntersectionFar)
 {
-	FVector ToWeapon = WeaponPosition - CombatSphere.Center;
-	FVector ToCloseIntersection = IntersectionClose - CombatSphere.Center;
-	FVector ToFarIntersection = IntersectionFar - CombatSphere.Center;
-	double CloseAngularDistance = FQuat::FindBetweenVectors(ToWeapon, ToCloseIntersection).GetAngle();
-	double FarAngularDistance = FQuat::FindBetweenVectors(ToWeapon, ToCloseIntersection).GetAngle();
+	const FVector PredictedWeaponLocation = UMathHelperLibrary::ExtrapolateNewPointFromAngularMomentum(CombatSphere.Center, WeaponPosition, WeaponAngularMomentum);
+	
+
+	const FVector ToPredictedWeaponLocation = WeaponPosition - CombatSphere.Center;
+	const FVector ToCloseIntersection = IntersectionClose - CombatSphere.Center;
+	const FVector ToFarIntersection = IntersectionFar - CombatSphere.Center;
+	double CloseAngularDistance = FQuat::FindBetweenVectors(ToPredictedWeaponLocation, ToCloseIntersection).GetAngle();
+	double FarAngularDistance = FQuat::FindBetweenVectors(ToPredictedWeaponLocation, ToCloseIntersection).GetAngle();
 	if (FarAngularDistance <= CloseAngularDistance)
 	{
-		TargetWeaponLocation = MouseOnSphereFar;
+		return IntersectionFar;
 	}
 	else
 	{
-		TargetWeaponLocation = MouseOnSphereClose;
+		return IntersectionClose;
 	}
-	return FVector();
 }

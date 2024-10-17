@@ -70,7 +70,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	float DebugArrowLength = 10.f;
 	UPROPERTY(EditAnywhere, Category = "Debug")
-	bool bDrawCombatSphere = false;
+	bool bDrawDebug = false;
 
 private:
 	/** Top down camera */

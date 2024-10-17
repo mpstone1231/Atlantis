@@ -25,5 +25,13 @@ public:
 	UFUNCTION(BlueprintPure)
 	static bool LineSphereIntersection(const FVector& LineStart, const FVector& LineDirection, const FSphere& Sphere, UPARAM(ref) FVector& Intersection1 /*Out*/, UPARAM(ref) FVector& Intersection2 /*Out*/, UPARAM(ref) double& T1/*Out*/, UPARAM(ref) double& T2/*Out*/);
 
+	// Using the difference between two points, calculate the angular and linear momentum they are undergoing. Angular Momentum vector
+	// Is in direction of rotational axis and magnitude is angular velocity in radians. Follows left hand rule convention.
+	UFUNCTION(BlueprintPure)
+	static void DetermineAngularAndLinearMomentumBetweenTwoPoints(const FVector& A, const FVector& B, UPARAM(ref) FVector& AngularMomentum, UPARAM(ref) FVector& LinearMomemntum);
+
+	// Given an angular momentum, determine where one point will translate to.
+	UFUNCTION(BlueprintPure)
+	static FVector ExtrapolateNewPointFromAngularMomentum(const FVector& Origin, const FVector& Point, const FVector& AngularMomentum);
 };
 

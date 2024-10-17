@@ -83,13 +83,16 @@ protected:
 	UPROPERTY(EditDefaultsOnly)
 	float DisambiguationAlpha = 0.5f;
 
+	UPROPERTY(EditDefaultsOnly)
+	bool bDrawDebug = false;
+
 private:
 
 	/* Combat Input */
 	FPlane DetermineInputPlane(const FVector& InputPlaneOrigin);
 	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FVector& DisambiguatingAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
 	FVector2D BreakMouseInputToInputSpaceComponents(const FVector& PlanarMouseInput, const FVector& RadialAxis, const FVector& LatitudinalAxis, const FVector& PlanarNormal);
-	FVector FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FSphere& CombatSphere, const FVector& WeaponPosition, const FVector& IntersectionClose, const FVector& IntersectionFar);
+	FVector FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FSphere& CombatSphere, const FVector& WeaponPosition, const FVector& WeaponAngularMomentum, const FVector& IntersectionClose, const FVector& IntersectionFar);
 
 	/* Movement */
 	FVector CachedDestination;

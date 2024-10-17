@@ -57,3 +57,34 @@ bool UMathHelperLibrary::LineSphereIntersection(const FVector& LineStart, const 
 
 	return true;
 }
+
+void UMathHelperLibrary::DetermineAngularAndLinearMomentumBetweenTwoPoints(const FVector& A, const FVector& B, UPARAM(ref)FVector& AngularMomentum, UPARAM(ref)FVector& LinearMomemntum)
+{
+	//TODO: Actually consider DeltaTime... And mass...
+
+	if ((A - B).IsNearlyZero())
+	{
+		AngularMomentum = FVector::ZeroVector;
+		LinearMomemntum = FVector::ZeroVector;
+		return;
+	}
+
+	float AngularRotationAngle = FQuat::FindBetweenVectors(A, B).GetAngle();
+
+	FVector RotationalAxis = FVector::CrossProduct(B, A).GetSafeNormal();
+	FVector LinearMotionAxis = FVector::CrossProduct(B, RotationalAxis).GetSafeNormal();
+
+	AngularMomentum = RotationalAxis * AngularRotationAngle;
+	LinearMomemntum = LinearMotionAxis * AngularRotationAngle;
+}
+
+FVector UMathHelperLibrary::ExtrapolateNewPointFromAngularMomentum(const FVector& Origin, const FVector& Point, const FVector& AngularMomentum)
+{
+	const double RotationInRad = AngularMomentum.Length();
+	if (RotationInRad < UE_DOUBLE_KINDA_SMALL_NUMBER) return Point;
+
+	FVector RelativePoint = Point - Origin;
+	RelativePoint = RelativePoint.RotateAngleAxisRad(RotationInRad, AngularMomentum.GetUnsafeNormal());
+
+	return (Origin + RelativePoint);
+}
