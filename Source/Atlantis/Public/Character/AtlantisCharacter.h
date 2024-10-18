@@ -37,6 +37,7 @@ protected:
 	virtual FVector GetWeaponRadialAxis_Implementation() override;
 	virtual FVector GetWeaponLatitudinalAxis_Implementation() override;
 	virtual FVector GetWeaponLocation_Implementation() override;
+	virtual FVector GetWeaponLinearMomentum_Implementation() override;
 	virtual FVector GetWeaponAngularMomentum_Implementation() override;
 	virtual FPlane GetInputPlaneFromCamera_Implementation() override;
 	virtual FPlane GetCombatPlane_Implementation() override;

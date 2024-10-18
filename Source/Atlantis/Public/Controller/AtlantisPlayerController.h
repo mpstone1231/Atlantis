@@ -91,7 +91,6 @@ private:
 	/* Combat Input */
 	FPlane DetermineInputPlane(const FVector& InputPlaneOrigin);
 	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FVector& DisambiguatingAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
-	FVector2D BreakMouseInputToInputSpaceComponents(const FVector& PlanarMouseInput, const FVector& RadialAxis, const FVector& LatitudinalAxis, const FVector& PlanarNormal);
 	FVector FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FSphere& CombatSphere, const FVector& WeaponPosition, const FVector& WeaponAngularMomentum, const FVector& IntersectionClose, const FVector& IntersectionFar);
 
 	/* Movement */
@@ -101,7 +100,8 @@ private:
 
 	FVector2D MouseMotion = FVector2D::ZeroVector;
 	FVector2D PrevMousePosition = FVector2D(-1.f, -1.f);
-	bool bIsStartOfNewMouseMotion = true;
+	bool bMouseWasIntersectingSphere = false;
+	FPlane MouseOutsideSphereInputPlane = FPlane();
 
 };
 

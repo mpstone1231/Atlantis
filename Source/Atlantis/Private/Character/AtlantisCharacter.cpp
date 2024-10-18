@@ -166,9 +166,14 @@ FVector AAtlantisCharacter::GetWeaponLocation_Implementation()
 	return WeaponLocation;
 }
 
-FVector AAtlantisCharacter::GetWeaponAngularMomentum_Implementation()
+FVector AAtlantisCharacter::GetWeaponLinearMomentum_Implementation()
 {
 	return WeaponLinearMomentum;
+}
+
+FVector AAtlantisCharacter::GetWeaponAngularMomentum_Implementation()
+{
+	return WeaponAngularMomentum;
 }
 
 FPlane AAtlantisCharacter::GetInputPlaneFromCamera_Implementation()

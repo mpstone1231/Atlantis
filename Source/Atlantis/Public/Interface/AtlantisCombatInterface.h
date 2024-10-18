@@ -32,6 +32,7 @@ public:
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponLatitudinalAxis();
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponLocation();
 	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponAngularMomentum();
+	UFUNCTION(BlueprintNativeEvent) FVector GetWeaponLinearMomentum();
 	UFUNCTION(BlueprintNativeEvent) FPlane GetInputPlaneFromCamera();
 	UFUNCTION(BlueprintNativeEvent) FPlane GetCombatPlane();
 	UFUNCTION(BlueprintNativeEvent) FSphere GetCombatSphere();
