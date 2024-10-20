@@ -27,6 +27,145 @@ AAtlantisPlayerController::AAtlantisPlayerController()
 	FollowTime = 0.f;
 }
 
+
+
+void AAtlantisPlayerController::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// 1. Get Mouse Location on screen
+	APawn* ControlledPawn = GetPawn();
+
+	if (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>())
+	{
+		UpdateCombatGeometry();
+
+		FVector2D MousePositionScreen;
+		if (GetMouseOnScreen(MousePositionScreen))
+		{
+			// Collect relevant Pawn Data
+			FVector WeaponLocation = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
+			
+			FVector MousePositionOnSphere;
+			FVector TargetWeaponLocation = WeaponLocation;
+
+			if (DetermineTargetWeaponLocationFromMouse(ControlledPawn, MousePositionScreen, MousePositionOnSphere))
+			{
+				TargetWeaponLocation = MousePositionOnSphere;
+			}
+
+			// Handle targets location and Mouse Input to determine a new sword location
+
+			UpdateSlashingPlane(WeaponLocation, TargetWeaponLocation);
+			
+			//Takes in MouseMotion right now, but doesn't do anything yet. Just sets weapon locaiton to targetr weapon location
+			IAtlantisCombatInterface::Execute_HandleCombatInputMouseMotion(ControlledPawn, TargetWeaponLocation, MouseMotion);
+
+			/* Update Cursor Location
+			FVector2D UpdatedScreenPosition;
+			if (UGameplayStatics::ProjectWorldToScreen(this, TargetWeaponLocation, UpdatedScreenPosition))
+			{
+				SetMouseLocation(UpdatedScreenPosition.X, UpdatedScreenPosition.Y);
+			}*/
+
+			if (bDrawDebug)
+			{
+				UKismetSystemLibrary::DrawDebugSphere(GetWorld(), CombatSphere.Center, CombatSphere.W, 20, FLinearColor::Blue, 0.f, 1.f);
+				
+			//	UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnCombatPlane, 20.f, 12, FLinearColor::Yellow, 0.f, 1.f);
+				UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
+			//	UKismetSystemLibrary::DrawDebugPlane(GetWorld(), SlashingPlane, CombatSphere.Center, CombatSphere.W);
+				UKismetSystemLibrary::DrawDebugCircle(GetWorld(), CombatSphere.Center, CombatSphere.W, 24, FLinearColor::Yellow, 0.f, 2.f, (TargetWeaponLocation - CombatSphere.Center).GetUnsafeNormal(), SlashingPlane.GetSafeNormal());
+			}
+		}
+	}
+
+	/*
+	if (bInCombatMode)
+	{
+		APawn* ControlledPawn = GetPawn();
+		if (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>())
+		{
+			ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player);
+			FVector2D MousePosition;
+
+			if (LocalPlayer && LocalPlayer->ViewportClient && LocalPlayer->ViewportClient->GetMousePosition(MousePosition))
+			{
+
+				IAtlantisCombatInterface::Execute_UpdateCombatGeometery(ControlledPawn);
+				FSphere CombatSphere = IAtlantisCombatInterface::Execute_GetCombatSphere(ControlledPawn);
+
+				FVector WeaponLocation = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
+				const FVector WeaponLinearMomentum = IAtlantisCombatInterface::Execute_GetWeaponLinearMomentum(ControlledPawn);
+				const FVector WeaponAngularMomentum = IAtlantisCombatInterface::Execute_GetWeaponAngularMomentum(ControlledPawn);
+				//FVector WeaponPositionOnInputplane = UKismetMathLibrary::ProjectPointOnToPlane(WeaponPosition, InputPlane.GetOrigin(), InputPlane.GetNormal());
+
+				FVector WorldMouseLocation, WorldMouseDir;
+				if (UGameplayStatics::DeprojectScreenToWorld(this, MousePosition, WorldMouseLocation, WorldMouseDir))
+				{
+					FVector MouseOnSphereClose, MouseOnSphereFar;
+					FVector TargetWeaponLocation = WeaponLocation;
+					double T1, T2;
+					if (UMathHelperLibrary::LineSphereIntersection(WorldMouseLocation, WorldMouseDir, CombatSphere, MouseOnSphereClose, MouseOnSphereFar, T1, T2))
+					{
+						bMouseWasIntersectingSphere = true;
+						TargetWeaponLocation = FindBestSphereIntersectionAsInput(ControlledPawn, CombatSphere, WeaponLocation, WeaponAngularMomentum, MouseOnSphereClose, MouseOnSphereFar);
+
+						if (!WeaponLinearMomentum.IsNearlyZero())
+						{
+							MouseSphereInputPlane = FPlane(CombatSphere.Center, WeaponLocation, WeaponLocation + WeaponLinearMomentum);
+						}
+
+						if (bDrawDebug) UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
+						//UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnSphereFar, 20.f, 12, FLinearColor::Green, 0.f, 1.f);
+					}
+					else
+					{
+
+						if (bMouseWasIntersectingSphere)
+						{
+							if (!WeaponLinearMomentum.IsNearlyZero())
+							{
+								MouseSphereInputPlane = FPlane(CombatSphere.Center, WeaponLocation, WeaponLocation + WeaponLinearMomentum);
+							}
+
+							bMouseWasIntersectingSphere = false;
+						}
+						float T_Unused; //Unsued
+						FVector MouseOnCombatPlane;
+						if (UKismetMathLibrary::LinePlaneIntersection(WorldMouseLocation, WorldMouseLocation + WorldMouseDir * HitResultTraceDistance, MouseSphereInputPlane, T_Unused, MouseOnCombatPlane))
+						{
+							TargetWeaponLocation = CombatSphere.Center + (MouseOnCombatPlane - CombatSphere.Center).GetUnsafeNormal() * CombatSphere.W;
+
+							if (bDrawDebug)
+							{
+								UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnCombatPlane, 20.f, 12, FLinearColor::Yellow, 0.f, 1.f);
+								UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
+
+								
+							}
+						}
+					}
+
+					if (bDrawDebug)
+					{
+						FVector ToTargetWeaponLocation = (TargetWeaponLocation - CombatSphere.Center).GetUnsafeNormal();
+						UKismetSystemLibrary::DrawDebugCircle(GetWorld(), CombatSphere.Center, CombatSphere.W, 24, FLinearColor::Yellow, 0.f, 2.f, ToTargetWeaponLocation, FVector::CrossProduct(MouseSphereInputPlane, ToTargetWeaponLocation).GetSafeNormal());
+					}
+
+					IAtlantisCombatInterface::Execute_HandleCombatInputMouseMotion(ControlledPawn, TargetWeaponLocation, MouseMotion);
+
+					FVector2D UpdatedWeaponLocationOnScreen;
+					if (UGameplayStatics::ProjectWorldToScreen(this, IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn), UpdatedWeaponLocationOnScreen))
+					{
+						//SetMouseLocation(UpdatedWeaponLocationOnScreen.X, UpdatedWeaponLocationOnScreen.Z);
+					}
+				}
+			}
+		}
+	} // if (bInCombatMode) */
+}
+
 void AAtlantisPlayerController::BeginPlay()
 {
 	// Call the base class  
@@ -37,7 +176,119 @@ void AAtlantisPlayerController::BeginPlay()
 	{
 		Subsystem->AddMappingContext(DefaultMappingContext, 0);
 	}
+
 }
+
+void AAtlantisPlayerController::SetPawn(APawn* InPawn)
+{
+	Super::SetPawn(InPawn);
+
+	if (InPawn && InPawn->Implements<UAtlantisCombatInterface>())
+	{
+		// Setup combat sphere based on controlled pawn's properties
+		IAtlantisCombatInterface::Execute_GetCombatSphereProperties(InPawn, CombatSphereHeight, CombatSphereRadius);
+		CombatSphere = FSphere(InPawn->GetActorLocation() + FVector(0.f, 0.f, CombatSphereHeight), CombatSphereRadius);
+		SlashingPlane = FPlane(CombatSphere.Center, FVector::UpVector);
+	}
+	else
+	{
+		UE_LOG(LogAtlantis, Warning, TEXT("AtlantisPlayerController has possessed a pawn that does NOT implement the Combat Interface!"));
+	}
+}
+
+// COMBAT AND HELPERS
+void AAtlantisPlayerController::UpdateCombatGeometry()
+{
+	CombatSphere.Center = GetPawn()->GetActorLocation() + FVector::UpVector * CombatSphereHeight;
+}
+
+void AAtlantisPlayerController::UpdateSlashingPlane(const FVector& OldWeaponLocation, const FVector& NewWeaponLocation)
+{
+	// Problem with this... Plane looks right but the circle is a little skew... problem with normalization?
+	
+	const FVector ToOldWeapon = (OldWeaponLocation - CombatSphere.Center);
+	const FVector ToNewWeapon = (NewWeaponLocation - CombatSphere.Center);
+	FQuat qWeaponRotation = FQuat::FindBetween(ToOldWeapon, ToNewWeapon);
+	FRotator RotationToApply = FRotator(qWeaponRotation);
+	FVector SlashingPlaneNormal = SlashingPlane.GetSafeNormal();
+	SlashingPlaneNormal = RotationToApply.RotateVector(SlashingPlaneNormal); //qWeaponRotation * SlashingPlaneNormal; //
+	SlashingPlane = FPlane(CombatSphere.Center, SlashingPlaneNormal);
+}
+
+/* Passes out a Vector3D of the Mouse in the viewport*/
+bool AAtlantisPlayerController::GetMouseOnScreen(FVector2D& MousePosition)
+{
+	ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player);
+
+	if (LocalPlayer && LocalPlayer->ViewportClient && LocalPlayer->ViewportClient->GetMousePosition(MousePosition))
+	{
+		return true;
+	}
+	return false;
+
+}
+
+bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromMouse(APawn* ControlledPawn, const FVector2D& MouseOnScreen, FVector& TargetWeaponPosition /*Out*/)
+{
+	FVector WorldMouseLocation, WorldMouseDir;
+	if (UGameplayStatics::DeprojectScreenToWorld(this, MouseOnScreen, WorldMouseLocation, WorldMouseDir))
+	{
+		if (DetermineTargetWeaponLocationFromCursorOnCombatSphere(ControlledPawn, WorldMouseLocation, WorldMouseDir, TargetWeaponPosition))
+		{
+			bMouseWasInCombatSphere = true;
+			return true;
+		}
+		else if (DetermineTargetWeaponLocationFromCursorOnCombatPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, TargetWeaponPosition))
+		{
+			//If this is the first time mouse has gone outside the CombatSphere, then switch if cursor trace goes to far or close side 
+			if (bMouseWasInCombatSphere) bSphereProjectionIsClose = !bSphereProjectionIsClose; 
+			bMouseWasInCombatSphere = false;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+//If a trace from the cursor intersects the CombatSphere, passes out the intersection closest to the camera
+bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnCombatSphere(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& MousePositionOnSphere /*Out*/)
+{
+	// TODO! After drawing debug spheres, try and go back to using the intersection with closest geodesic distance to weapon location, and if intersecting with sphere set cursor to weapon location,
+	// if intersecting with plane, ignore
+	FVector MouseOnSphereClose, MouseOnSphereFar;
+	double T1, T2;
+	const FVector WeaponLocation = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
+	if (UMathHelperLibrary::LineSphereIntersection(MouseWorldSpace, MouseWorldDir, CombatSphere, MouseOnSphereClose, MouseOnSphereFar, T1, T2))
+	{
+		MousePositionOnSphere = bSphereProjectionIsClose ? MouseOnSphereClose : MouseOnSphereFar;//FindSimpleBestSphereIntersectionAsInput(ControlledPawn, CombatSphere, WeaponLocation, MouseOnSphereClose, MouseOnSphereFar);
+		return true;
+	}
+	
+	return false;
+}
+
+//First finds where the cursor intersects the CombatPlane (normal parallel to camera, intersecting origin of combat sphere).
+//Next, we project the planar intersection onto the nearest point on the CombatSphere.
+bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnCombatPlane(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& OutPositionOnSphere /*Out*/)
+{
+	FPlane CombatPlane = FPlane(CombatSphere.Center, -IAtlantisCombatInterface::Execute_GetCameraFacingDirection(ControlledPawn));
+	FVector WeaponLocation = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
+
+	float T_Unused; //Unsued
+	FVector MousePositionOnPlane;
+	if (UKismetMathLibrary::LinePlaneIntersection(MouseWorldSpace, MouseWorldSpace + MouseWorldDir * HitResultTraceDistance, CombatPlane, T_Unused, MousePositionOnPlane))
+	{
+		// Get the location of the cursor if it were projected from the plane directly onto the nearest point on the combat sphere
+		const FVector CursorProjectedOnSphereRelative = (MousePositionOnPlane - CombatSphere.Center).GetUnsafeNormal() * CombatSphere.W;
+	
+		OutPositionOnSphere = CombatSphere.Center + CursorProjectedOnSphereRelative;
+		return true;
+	}
+
+	return false;
+}
+
+// INPUT SYSTEM
 
 void AAtlantisPlayerController::SetupInputComponent()
 {
@@ -53,9 +304,8 @@ void AAtlantisPlayerController::SetupInputComponent()
 		EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Completed, this, &AAtlantisPlayerController::OnSetDestinationReleased);
 		EnhancedInputComponent->BindAction(SetDestinationClickAction, ETriggerEvent::Canceled, this, &AAtlantisPlayerController::OnSetDestinationReleased);
 
-		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Started, this, &AAtlantisPlayerController::OnEnterCombatStarted);
-		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Completed, this, &AAtlantisPlayerController::OnEnterCombatReleased);
-		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Triggered, this, &AAtlantisPlayerController::OnEnterCombatTriggered);
+		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Started, this, &AAtlantisPlayerController::OnLockSlashingPlaneStarted);
+		EnhancedInputComponent->BindAction(EnterCombatClickAction, ETriggerEvent::Completed, this, &AAtlantisPlayerController::OnLockSlashingPlaneReleased);
 
 		EnhancedInputComponent->BindAction(MouseMotionAction, ETriggerEvent::Triggered, this, &AAtlantisPlayerController::OnMouseMotionTriggered);
 		EnhancedInputComponent->BindAction(MouseMotionAction, ETriggerEvent::Completed, this, &AAtlantisPlayerController::OnMouseMotionStopped);
@@ -110,6 +360,7 @@ void AAtlantisPlayerController::OnSetDestinationReleased()
 	FollowTime = 0.f;
 }
 
+/*
 void AAtlantisPlayerController::OnEnterCombatTriggered()
 {
 	APawn* ControlledPawn = GetPawn();
@@ -152,23 +403,23 @@ void AAtlantisPlayerController::OnEnterCombatTriggered()
 					//Consideration... What if that plane is coincident with Camera? As in, its a line...? Then just in and out? Since Mouse gets snapped back to combat sphere/Weapon position....
 					//What if mouse is allowed to go out, but its sort of yanked back by weapon position?
 					//What is mouse is allowed to move "Freely" but based on the mass and momentum of the weapon the cursor gets yanked back, like there's a spring between the cursor and weapon...
-					/*
-					FPlane InputPlane = IAtlantisCombatInterface::Execute_GetInputPlaneFromCamera(ControlledPawn);
-					float T_Unused; //Unsued
-					FVector MouseOnCombatPlane;
-					if (UKismetMathLibrary::LinePlaneIntersection(WorldMouseLocation, WorldMouseLocation + WorldMouseDir * HitResultTraceDistance, InputPlane, T_Unused, MouseOnCombatPlane))
-					{
-						TargetWeaponLocation = CombatSphere.Center + (MouseOnCombatPlane - CombatSphere.Center).GetUnsafeNormal() * CombatSphere.W;
+					
+					//FPlane InputPlane = IAtlantisCombatInterface::Execute_GetInputPlaneFromCamera(ControlledPawn);
+					//float T_Unused; //Unsued
+					//FVector MouseOnCombatPlane;
+					//if (UKismetMathLibrary::LinePlaneIntersection(WorldMouseLocation, WorldMouseLocation + WorldMouseDir * HitResultTraceDistance, InputPlane, T_Unused, MouseOnCombatPlane))
+					//{
+					//	TargetWeaponLocation = CombatSphere.Center + (MouseOnCombatPlane - CombatSphere.Center).GetUnsafeNormal() * CombatSphere.W;
 
-						if (bDrawDebug)
-						{
-							UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnCombatPlane, 20.f, 12, FLinearColor::Yellow, 0.f, 1.f);
-							UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
+					//	if (bDrawDebug)
+					//	{
+					//		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnCombatPlane, 20.f, 12, FLinearColor::Yellow, 0.f, 1.f);
+					//		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
 
-							UKismetSystemLibrary::DrawDebugCircle(GetWorld(), CombatSphere.Center, CombatSphere.W, 24, FLinearColor::Yellow, 0.f, 2.f, WeaponLinearMomentum.GetSafeNormal(), WeaponAngularMomentum.GetSafeNormal());
-						}
-					}
-					*/
+					//		UKismetSystemLibrary::DrawDebugCircle(GetWorld(), CombatSphere.Center, CombatSphere.W, 24, FLinearColor::Yellow, 0.f, 2.f, WeaponLinearMomentum.GetSafeNormal(), WeaponAngularMomentum.GetSafeNormal());
+					//	}
+					//}
+					//
 					
 					if (bMouseWasIntersectingSphere)
 					{
@@ -210,168 +461,16 @@ void AAtlantisPlayerController::OnEnterCombatTriggered()
 			}
 		}
 	}
+}*/
+
+void AAtlantisPlayerController::OnLockSlashingPlaneStarted()
+{
+	bSlashingPlaneIsLocked = true;
 }
 
-//void AAtlantisPlayerController::OnEnterCombatTriggered()
-//{
-//	// TODO: Modify this so instead of MousePosition, we get Mouse "velocity" projected onto combat plane
-//	// Might not even need a plane to trace along. We can use the height of the pawn actor and a plane with a normal of UpVector
-//	// Direction is projected onto plane and magnitude is scaled with raw mouse input.
-//	// Adds a 'force' to weapon / cursor
-//	// How/where is force handled? In Controller or character? Maybe here. 
-//	// To start: Weapon/Cursor can have mass, 'friction' (radial and longitudinal?) and such. Make sure to preserve angular momentum, especially when reaching the limits
-//	// Later: Resistance at the start of a swing and followthrough in mid swing. "Dampen" zones when sword goes through swing (off to sides of target direction?) 
-//	// Control controls some sort of physics object? Probe only? Used to do physics calculations, and tick updates the sword to match position/orientation? Try some stuff!
-//
-//	// UKismetMathLibrary::ProjectVectorOnToPlane(MouseMotion, FVector::UpVector);
-//
-//	//double MouseDeltaX, MouseDeltaY;
-//	//GetInputMouseDelta(MouseDeltaX, MouseDeltaY);
-//	//UE_LOG(LogAtlantis, Display, TEXT("Mouse: %lf, %lf"), MouseDeltaX, MouseDeltaY);
-//	//FVector2D MouseMotion = FVector2D(MouseDeltaX, MouseDeltaY);
-//
-//	APawn* ControlledPawn = GetPawn();
-//	const bool bValidAndImplementsCombatInterface = (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>());
-//
-//	if (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>())
-//	{
-//		IAtlantisCombatInterface::Execute_UpdateCombatGeometery(ControlledPawn);
-//
-//		UE_LOG(LogAtlantis, Display, TEXT("Mouse: %lf, %lf"), MouseMotion.X, MouseMotion.Y);
-//
-//		// Collapse all this to a function (getting combat data from mouse motion)
-//		ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player);
-//		bool bHit = false;
-//		FVector2D MousePosition;
-//
-//		if (LocalPlayer && LocalPlayer->ViewportClient)
-//		{
-//			if (LocalPlayer->ViewportClient->GetMousePosition(MousePosition))
-//			{
-//				if (!bIsStartOfNewMouseMotion) //If just entering combat mode, get initial mouse position first
-//				{
-//					//MouseEndPosition = MouseStartPosition + MouseMotion;
-//
-//					FVector WorldMouseStart, WorldMouseStartDir;
-//					FVector WorldMousePos, WorldMouseDir;
-//					//Can get rid of this!! Planar mout motion is just mouse motion, isn't it? Input plane is on screen plane.
-//					//Then set mouse cursor to weapon position!
-//					if (UGameplayStatics::DeprojectScreenToWorld(this, PrevMousePosition, WorldMouseStart, WorldMouseStartDir) &&
-//						UGameplayStatics::DeprojectScreenToWorld(this, MousePosition, WorldMousePos, WorldMouseDir))
-//					{
-//						FVector WeaponPosition = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
-//						FSphere CombatSphere = IAtlantisCombatInterface::Execute_GetCombatSphere(ControlledPawn);
-//						FPlane InputPlane = IAtlantisCombatInterface::Execute_GetInputPlaneFromCamera(ControlledPawn);// DetermineInputPlane(WeaponPosition);
-//
-//						FVector MouseStartOnCombatPlane, MouseEndOnCombatPlane;
-//						float T; //Unused
-//						UKismetMathLibrary::LinePlaneIntersection(WorldMouseStart, WorldMouseStart + WorldMouseStartDir * HitResultTraceDistance, InputPlane, T, MouseStartOnCombatPlane);
-//						UKismetMathLibrary::LinePlaneIntersection(WorldMousePos, WorldMousePos + WorldMouseDir * HitResultTraceDistance, InputPlane, T, MouseEndOnCombatPlane);
-//						FVector PlanarMouseMotion = MouseEndOnCombatPlane - MouseStartOnCombatPlane;
-//
-//						UKismetSystemLibrary::DrawDebugPlane(GetWorld(), InputPlane, MouseEndOnCombatPlane, 20.f, FLinearColor::Yellow, 0.f);
-//
-//						FVector WeaponRadialAxis = IAtlantisCombatInterface::Execute_GetWeaponRadialAxis(ControlledPawn);
-//						FVector WeaponLatitudinalAxis = IAtlantisCombatInterface::Execute_GetWeaponLatitudinalAxis(ControlledPawn);
-//
-//						FVector InputRadialAxis, InputLatitudinalAxis;// = FVector::VectorPlaneProject(WeaponRadialAxis, OperationalCombatPlane.GetSafeNormal()).GetSafeNormal();
-//						FVector DisambiguatingAxis = (CombatSphere.Center - WeaponPosition).GetSafeNormal();
-//						//FVector InputLatitudinalAxis = FVector::VectorPlaneProject(WeaponLatitudinalAxis, OperationalCombatPlane.GetSafeNormal()).GetSafeNormal();
-//						if (ProjectRadialAndLatitudinalAxesOntoInputSpace(WeaponRadialAxis, WeaponLatitudinalAxis, DisambiguatingAxis, InputPlane, InputRadialAxis, InputLatitudinalAxis))
-//						{
-//							//Input axes are NOT orthonormalized... ought they be at least normalized? if its janky, try to normalize first 
-//							FVector2D MouseMotionInInputSpace = BreakMouseInputToInputSpaceComponents(PlanarMouseMotion, InputRadialAxis, InputLatitudinalAxis, InputPlane.GetSafeNormal());
-//							//	float InputRadialMagnitudeNormalized = FVector::DotProduct(PlanarMouseMotion, InputRadialAxis) / PlanarMouseMotion.Length();
-//							//	float InputLatitudinalMagnitudeNormalized = FVector::DotProduct(PlanarMouseMotion, InputLatitudinalAxis) / PlanarMouseMotion.Length();
-//
-//							UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseEndOnCombatPlane, MouseEndOnCombatPlane + 15.f * InputRadialAxis, 5.f, FLinearColor::Red, 0.f, 2.f);
-//							UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseEndOnCombatPlane, MouseEndOnCombatPlane + 15.f * InputLatitudinalAxis, 5.f, FLinearColor::Blue, 0.f, 2.f);
-//
-//							UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseEndOnCombatPlane, MouseEndOnCombatPlane + 3.f*(MouseMotionInInputSpace.X * InputRadialAxis + MouseMotionInInputSpace.Y * InputLatitudinalAxis), 5.f, FLinearColor::Green, 0.f, 2.f);
-//
-//							IAtlantisCombatInterface::Execute_HandleCombatInputMouseMotion(ControlledPawn, MouseStartOnCombatPlane, MouseMotionInInputSpace);
-//						}
-//
-//
-//						/*
-//						FVector MouseStartOnCombatPlane, MouseEndOnCombatPlane;
-//						FPlane CombatPlane = IAtlantisCombatInterface::Execute_GetCombatPlane(ControlledPawn);
-//						float T; //Unused
-//						UKismetMathLibrary::LinePlaneIntersection(WorldMouseStart, WorldMouseStart + WorldMouseStartDir * HitResultTraceDistance, CombatPlane, T, MouseStartOnCombatPlane);
-//						UKismetMathLibrary::LinePlaneIntersection(WorldMouseEnd, WorldMouseEnd + WorldMouseEndDir * HitResultTraceDistance, CombatPlane, T, MouseEndOnCombatPlane);
-//
-//						FVector PlanarMouseMotion = MouseEndOnCombatPlane - MouseStartOnCombatPlane;
-//						IAtlantisCombatInterface::Execute_HandleCombatInputMouseMotion(ControlledPawn , MouseStartOnCombatPlane, PlanarMouseMotion, MouseMotion.Length());
-//						*/
-//						/*
-//						FPlane CombatPlane = IAtlantisCombatInterface::Execute_GetCombatPlane(ControlledPawn);
-//						float T; //Unused
-//
-//						UKismetMathLibrary::LinePlaneIntersection(WorldMouseStart, WorldMouseStart + WorldMouseStartDir * HitResultTraceDistance, CombatPlane, T, MouseStartOnCombatPlane);
-//						UKismetMathLibrary::LinePlaneIntersection(WorldMouseEnd, WorldMouseEnd + WorldMouseEndDir * HitResultTraceDistance, CombatPlane, T, MouseEndOnCombatPlane);
-//
-//						UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseStartOnCombatPlane, MouseEndOnCombatPlane, MouseMotion.Length(), FLinearColor::Red, DebugArrowPersistTime, MouseMotion.Length()/2.f);
-//						*/
-//					}
-//				}
-//
-//				PrevMousePosition = MousePosition;
-//				bIsStartOfNewMouseMotion = false;
-//
-//			}
-//		}
-//		/*
-//		FVector WorldMouseMotion;
-//		FVector WorldDirection; //Not needed for our context (this is direction of ray for a mouse trace, if we were using position, but we're getting mouse motin in world space)
-//
-//		if (UGameplayStatics::DeprojectScreenToWorld(this, MouseMotion, WorldMouseMotion, WorldDirection))
-//		{
-//			FVector MouseMotionOnCombatPlane = UKismetMathLibrary::ProjectVectorOnToPlane(WorldMouseMotion, FVector::UpVector);
-//
-//			FVector DebugStart = ControlledPawn->GetActorLocation();
-//			DebugStart.Z = MouseMotionOnCombatPlane.Z;
-//			UKismetSystemLibrary::DrawDebugArrow(GetWorld(), DebugStart, DebugStart + 25.f * MouseMotionOnCombatPlane, 1.f, FLinearColor::Red, 0.2f, 1.5f);
-//		}*/
-//	}
-//
-//	if (bValidAndImplementsCombatInterface)
-//	{
-//		TArray<FHitResult> Hits = TArray<FHitResult>();
-//		bool bHitSuccessful = false;
-//		bHitSuccessful = GetMultiLineHitResultsUnderCursor(ECC_CombatTracePlane, true, Hits);
-//
-//		if (!Hits.IsEmpty())
-//		{
-//			for (FHitResult& Hit : Hits)
-//			{
-//				if (Hit.GetActor() == ControlledPawn) //If Collision hit is with this controller's pawn's combat plane
-//				{
-//					IAtlantisCombatInterface::Execute_HandleCombatInputMouseLocation(ControlledPawn, Hit.ImpactPoint);
-//					return;
-//				}
-//			}
-//		}
-//	}
-//}
-
-void AAtlantisPlayerController::OnEnterCombatStarted()
+void AAtlantisPlayerController::OnLockSlashingPlaneReleased()
 {
-	bInCombatMode = true;
-	if (GetPawn() && GetPawn()->Implements<UAtlantisCombatInterface>())
-	{
-		IAtlantisCombatInterface::Execute_EnterCombatMode(GetPawn());
-	}
-
-}
-
-void AAtlantisPlayerController::OnEnterCombatReleased()
-{
-	bInCombatMode = false;
-	if (GetPawn() && GetPawn()->Implements<UAtlantisCombatInterface>())
-	{
-		IAtlantisCombatInterface::Execute_ExitCombatMode(GetPawn());
-	}
-
+	bSlashingPlaneIsLocked = false;
 }
 
 void AAtlantisPlayerController::OnMouseMotionTriggered(const FInputActionInstance& Instance)
@@ -382,6 +481,7 @@ void AAtlantisPlayerController::OnMouseMotionTriggered(const FInputActionInstanc
 	if (!bInCombatMode) return;
 	
 	MouseMotion = Instance.GetValue().Get<FVector2D>();
+	UE_LOG(LogAtlantis, Display, TEXT("Mouse Motion: %s"), *MouseMotion.ToString());
 }
 
 void AAtlantisPlayerController::OnMouseMotionStopped(const FInputActionInstance& Instance)
@@ -498,16 +598,32 @@ bool AAtlantisPlayerController::ProjectRadialAndLatitudinalAxesOntoInputSpace(co
 	*/
 }
 
-FVector AAtlantisPlayerController::FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FSphere& CombatSphere, const FVector& WeaponPosition, const FVector& WeaponAngularMomentum, const FVector& IntersectionClose, const FVector& IntersectionFar)
+FVector AAtlantisPlayerController::FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FVector& WeaponPosition, const FVector& WeaponAngularMomentum, const FVector& IntersectionClose, const FVector& IntersectionFar)
 {
 	const FVector PredictedWeaponLocation = UMathHelperLibrary::ExtrapolateNewPointFromAngularMomentum(CombatSphere.Center, WeaponPosition, WeaponAngularMomentum);
 	
-
 	const FVector ToPredictedWeaponLocation = PredictedWeaponLocation - CombatSphere.Center;
 	const FVector ToCloseIntersection = IntersectionClose - CombatSphere.Center;
 	const FVector ToFarIntersection = IntersectionFar - CombatSphere.Center;
 	double CloseAngularDistance = FQuat::FindBetweenVectors(ToPredictedWeaponLocation, ToCloseIntersection).GetAngle();
 	double FarAngularDistance = FQuat::FindBetweenVectors(ToPredictedWeaponLocation, ToCloseIntersection).GetAngle();
+	if (FarAngularDistance <= CloseAngularDistance)
+	{
+		return IntersectionFar;
+	}
+	else
+	{
+		return IntersectionClose;
+	}
+}
+
+FVector AAtlantisPlayerController::FindSimpleBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FVector& WeaponPosition, const FVector& IntersectionClose, const FVector& IntersectionFar)
+{
+	const FVector ToWeapon = WeaponPosition - CombatSphere.Center;
+	const FVector ToCloseIntersection = IntersectionClose - CombatSphere.Center;
+	const FVector ToFarIntersection = IntersectionFar - CombatSphere.Center;
+	double CloseAngularDistance = FQuat::FindBetweenVectors(ToWeapon, ToCloseIntersection).GetAngle();
+	double FarAngularDistance = FQuat::FindBetweenVectors(ToWeapon, ToCloseIntersection).GetAngle();
 	if (FarAngularDistance <= CloseAngularDistance)
 	{
 		return IntersectionFar;

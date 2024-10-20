@@ -21,6 +21,8 @@ class AAtlantisPlayerController : public APlayerController
 
 public:
 	AAtlantisPlayerController();
+	
+	virtual void Tick(float DeltaSeconds) override;
 
 	/** Time Threshold to know if it was a short press */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
@@ -50,8 +52,9 @@ protected:
 	
 	virtual void SetupInputComponent() override;
 	
-	// To add mapping context
-	virtual void BeginPlay();
+	// Parent Overrides
+	virtual void BeginPlay() override;
+	virtual void SetPawn(APawn* InPawn) override;
 
 	/** Input handlers for SetDestination action. */
 	void OnInputStarted();
@@ -59,9 +62,9 @@ protected:
 	void OnSetDestinationReleased();
 
 	/** Input handlers for EnterCombat action. */
-	void OnEnterCombatTriggered();
-	void OnEnterCombatStarted();
-	void OnEnterCombatReleased();
+//	void OnEnterCombatTriggered();
+	void OnLockSlashingPlaneStarted();
+	void OnLockSlashingPlaneReleased();
 
 	/** Input handlers for MouseMotion action. */
 	void OnMouseMotionTriggered(const FInputActionInstance& Instance);
@@ -78,7 +81,9 @@ protected:
 	uint32 bMoveToMouseCursor : 1;
 
 	/* Combat */
-	bool bInCombatMode = false;
+	bool bInCombatMode = true;
+	bool bSlashingPlaneIsLocked = false;
+	
 
 	UPROPERTY(EditDefaultsOnly)
 	float DisambiguationAlpha = 0.5f;
@@ -88,20 +93,37 @@ protected:
 
 private:
 
+	/* Combat General */
+	void UpdateCombatGeometry();
+	void UpdateSlashingPlane(const FVector& OldWeaponLocation, const FVector& NewWeaponLocation);
+
 	/* Combat Input */
+	bool GetMouseOnScreen(FVector2D& MousePosition /*Out*/);
+	bool DetermineTargetWeaponLocationFromMouse(APawn* ControlledPawn, const FVector2D& MouseOnScreen, FVector& TargetWeaponPosition /*Out*/);
+	bool DetermineTargetWeaponLocationFromCursorOnCombatSphere(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& MousePositionOnSphere /*Out*/);
+	bool DetermineTargetWeaponLocationFromCursorOnCombatPlane(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& OutPositionOnSphere /*Out*/);
+
 	FPlane DetermineInputPlane(const FVector& InputPlaneOrigin);
 	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FVector& DisambiguatingAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
-	FVector FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FSphere& CombatSphere, const FVector& WeaponPosition, const FVector& WeaponAngularMomentum, const FVector& IntersectionClose, const FVector& IntersectionFar);
+	FVector FindBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FVector& WeaponPosition, const FVector& WeaponAngularMomentum, const FVector& IntersectionClose, const FVector& IntersectionFar);
+	FVector FindSimpleBestSphereIntersectionAsInput(const APawn* ControlledPawn, const FVector& WeaponPosition, const FVector& IntersectionClose, const FVector& IntersectionFar);
+
+	bool bSphereProjectionIsClose = true;
+	bool bMouseWasInCombatSphere = false;
+	FSphere CombatSphere = FSphere();
+	float CombatSphereHeight = 0.f;
+	float CombatSphereRadius = 1.f;
+
+	FVector2D MouseMotion = FVector2D::ZeroVector;
+	FVector2D PrevMousePosition = FVector2D(-1.f, -1.f);
+	bool bMouseWasIntersectingSphere = false;
+	FPlane SlashingPlane = FPlane();
 
 	/* Movement */
 	FVector CachedDestination;
 
 	float FollowTime; // For how long it has been pressed
 
-	FVector2D MouseMotion = FVector2D::ZeroVector;
-	FVector2D PrevMousePosition = FVector2D(-1.f, -1.f);
-	bool bMouseWasIntersectingSphere = false;
-	FPlane MouseOutsideSphereInputPlane = FPlane();
 
 };
 

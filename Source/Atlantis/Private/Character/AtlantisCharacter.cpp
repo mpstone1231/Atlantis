@@ -44,15 +44,11 @@ AAtlantisCharacter::AAtlantisCharacter()
 	Weapon->SetupAttachment(GetMesh(), FName("weapon_r_socket"));
 	Weapon->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	// Setup Combat Geometry
-	CombatPlane = FPlane(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), FVector::UpVector);
-	CombatSphere = FSphere(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), CombatSphereRadius);
-
 	// Setup debug 
  	DebugWeaponMass = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DebugWeaponMass"));
 	DebugWeaponMass->SetupAttachment(GetMesh());
 	DebugWeaponMass->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	WeaponRelativeLocation = -FVector::ForwardVector * CombatSphere.W;
+	WeaponRelativeLocation = -FVector::ForwardVector * CombatSphereRadius;
 
 	// Create a camera...
 	TopDownCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("TopDownCamera"));
@@ -72,17 +68,12 @@ void AAtlantisCharacter::Tick(float DeltaSeconds)
 
 	if (bDrawDebug)
 	{
-		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), CombatSphere.Center, CombatSphere.W, 12, FLinearColor::Blue, 0.f, 1.f);
 
-		UKismetSystemLibrary::DrawDebugPlane(GetWorld(), Execute_DetermineCombatSphereTangentialPlane(this), CombatSphere.Center + WeaponRelativeLocation, 20.f, FLinearColor::Green, 0.f);
-	
-		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponRadialAxis, 5.f, FLinearColor::Red, DebugArrowPersistTime, 2.f);
-		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponLatitudinalAxis, 5.f, FLinearColor::Blue, DebugArrowPersistTime, 2.f);
-
-		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), CombatSphere.Center, CombatSphere.Center + DebugArrowLength * WeaponAngularMomentum, 5.f, FLinearColor::Green, DebugArrowPersistTime, 2.f);
+		FVector CombatSphereCenter = GetActorLocation() + FVector(0.f, 0.f, CombatSphereHeight);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), CombatSphereCenter, CombatSphereCenter + DebugArrowLength * WeaponAngularMomentum, 5.f, FLinearColor::Green, DebugArrowPersistTime, 2.f);
 		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), WeaponLocation, WeaponLocation + DebugArrowLength * WeaponLinearMomentum, 5.f, FLinearColor::Black, DebugArrowPersistTime, 2.f);
 	
-		const FVector PredictedWeaponLocation = UMathHelperLibrary::ExtrapolateNewPointFromAngularMomentum(CombatSphere.Center, WeaponLocation, WeaponAngularMomentum);
+		const FVector PredictedWeaponLocation = UMathHelperLibrary::ExtrapolateNewPointFromAngularMomentum(CombatSphereCenter, WeaponLocation, WeaponAngularMomentum);
 		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), PredictedWeaponLocation, 20.f, 12, FLinearColor(1.f, 0.f, 1.f), 0.f, 1.f);
 	}
 }
@@ -130,7 +121,7 @@ void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVect
 	WeaponLocation = TargetWeaponPosition;
 
 	// TODO: Store linear AND angular momentum to be retrieved by Controller when deciding next target from intersections
-	UpdateWeaponKinematics(PrevWeaponLocation);
+//	UpdateWeaponKinematics(PrevWeaponLocation);
 
 	//UKismetSystemLibrary::DrawDebugArrow(GetWorld(), MouseLocationStart, MouseLocationStart + TangentialPlaneInput, TangentialPlaneInput.Length(), FLinearColor::Red, DebugArrowPersistTime, TangentialPlaneInput.Length() / 2.f);
 	
@@ -143,22 +134,10 @@ void AAtlantisCharacter::HandleCombatInputMouseMotion_Implementation(const FVect
 
 }
 
-void AAtlantisCharacter::UpdateCombatGeometery_Implementation()
+void AAtlantisCharacter::GetCombatSphereProperties_Implementation(float& OutCombatSphereHeight, float& OutCombatSphereRadius)
 {
-	CombatPlane = FPlane(GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight), FVector::UpVector);
-	CombatSphere.Center = GetActorLocation() + FVector(0.f, 0.f, CombatPlaneHeight);
-
-	UpdateWeaponTangentialAxes();
-}
-
-FVector AAtlantisCharacter::GetWeaponRadialAxis_Implementation()
-{
-	return WeaponRadialAxis;
-}
-
-FVector AAtlantisCharacter::GetWeaponLatitudinalAxis_Implementation()
-{
-	return WeaponLatitudinalAxis;
+	OutCombatSphereHeight = CombatSphereHeight;
+	OutCombatSphereRadius = CombatSphereRadius;
 }
 
 FVector AAtlantisCharacter::GetWeaponLocation_Implementation()
@@ -176,28 +155,12 @@ FVector AAtlantisCharacter::GetWeaponAngularMomentum_Implementation()
 	return WeaponAngularMomentum;
 }
 
-FPlane AAtlantisCharacter::GetInputPlaneFromCamera_Implementation()
+FVector AAtlantisCharacter::GetCameraFacingDirection_Implementation()
 {
-	return FPlane(CombatSphere.Center, -TopDownCameraComponent->GetForwardVector());
+	return TopDownCameraComponent->GetForwardVector();
 }
 
-FPlane AAtlantisCharacter::GetCombatPlane_Implementation()
-{
-	return CombatPlane;
-}
-
-FSphere AAtlantisCharacter::GetCombatSphere_Implementation()
-{
-	return CombatSphere;
-}
-
-//Determines the plane tangential to the combat sphere at the point of where the weapon resides
-FPlane AAtlantisCharacter::DetermineCombatSphereTangentialPlane_Implementation()
-{
-	FVector TangentNormal = WeaponRelativeLocation.GetSafeNormal();
-	return FPlane(CombatSphere.Center + WeaponRelativeLocation, TangentNormal); //Assumes Debug Weapon Location is ON the sphere
-}
-
+/*
 void AAtlantisCharacter::UpdateWeaponPosition(const FVector2D& TangentialInput)
 {
 	// Rotates weapon position on sphere by translating tangential planar input into rotational motion along sphere
@@ -214,31 +177,5 @@ void AAtlantisCharacter::UpdateWeaponPosition(const FVector2D& TangentialInput)
 
 	WeaponRelativeLocation *= CombatSphere.W/WeaponRelativeLocation.Length(); //Ensure no drift in length
 	
-}
+}*/
 
-void AAtlantisCharacter::UpdateWeaponTangentialAxes()
-{
-	//For radial, cross product the DebugWeaponLocation - CombatSphere.center with FVector::UpVector... cross again for 
-	WeaponToCombatOrigin = (-WeaponRelativeLocation).GetSafeNormal();
-	WeaponRadialAxis = FVector::CrossProduct(WeaponToCombatOrigin, FVector::UpVector).GetSafeNormal();//.GetSafeNormal();
-	WeaponLatitudinalAxis = FVector::CrossProduct(WeaponRadialAxis, WeaponToCombatOrigin);//.GetSafeNormal();
-}
-
-void AAtlantisCharacter::UpdateWeaponKinematics(const FVector& PreviousWeaponLocation)
-{
-	// IMPORTANT NOTE! Not really getting "velocities" without delta time...
-	// These are ROUGH approximations of kinematics and should be taken as such...
-	// Also, I'm assuming Linear momentum is tangential to the combat sphere, but what if mouse goes off? Can Sword go inside sphere based on target position? Can it go outside?
-	// Should I consider the tangential component and velocity in and out of the sphere?
-	
-	// Also, if I'm getting the kinematics in one way here, and applying the same in reverse in the controller, I should make a pair
-	// of math helpers that are CONSISTENT so I don't get weird stuff going on.
-
-	
-
-	FVector ToWeapon = WeaponLocation - CombatSphere.Center;
-	FVector ToPrevWeapon = PreviousWeaponLocation - CombatSphere.Center;
-
-	UMathHelperLibrary::DetermineAngularAndLinearMomentumBetweenTwoPoints(ToPrevWeapon, ToWeapon, WeaponAngularMomentum, WeaponLinearMomentum);
-	
-}
