@@ -49,16 +49,19 @@ void AAtlantisPlayerController::Tick(float DeltaSeconds)
 			FVector MousePositionOnSphere;
 			FVector TargetWeaponLocation = WeaponLocation;
 
+			// Handle targets location and Mouse Input to determine a new sword location
 			if (DetermineTargetWeaponLocationFromMouse(ControlledPawn, MousePositionScreen, MousePositionOnSphere))
 			{
 				TargetWeaponLocation = MousePositionOnSphere;
 			}
 
-			// Handle targets location and Mouse Input to determine a new sword location
-
-			UpdateSlashingPlane(WeaponLocation, TargetWeaponLocation);
+			// Transforms the slashing plane by rotating it 
+			if (!bSlashingPlaneIsLocked)
+			{
+				UpdateSlashingPlane(WeaponLocation, TargetWeaponLocation);
+			}
 			
-			//Takes in MouseMotion right now, but doesn't do anything yet. Just sets weapon locaiton to targetr weapon location
+			//Takes in MouseMotion right now, but doesn't do anything yet. Just sets weapon locaiton to target weapon location
 			IAtlantisCombatInterface::Execute_HandleCombatInputMouseMotion(ControlledPawn, TargetWeaponLocation, MouseMotion);
 
 			/* Update Cursor Location
@@ -74,8 +77,10 @@ void AAtlantisPlayerController::Tick(float DeltaSeconds)
 				
 			//	UKismetSystemLibrary::DrawDebugSphere(GetWorld(), MouseOnCombatPlane, 20.f, 12, FLinearColor::Yellow, 0.f, 1.f);
 				UKismetSystemLibrary::DrawDebugSphere(GetWorld(), TargetWeaponLocation, 20.f, 12, FLinearColor::Red, 0.f, 1.f);
-			//	UKismetSystemLibrary::DrawDebugPlane(GetWorld(), SlashingPlane, CombatSphere.Center, CombatSphere.W);
-				UKismetSystemLibrary::DrawDebugCircle(GetWorld(), CombatSphere.Center, CombatSphere.W, 24, FLinearColor::Yellow, 0.f, 2.f, (TargetWeaponLocation - CombatSphere.Center).GetUnsafeNormal(), SlashingPlane.GetSafeNormal());
+			//	UKismetSystemLibrary::DrawDebugPlane(GetWorld(), SlashingPlane, CombatSphere.Center, CombatSphere.W, FLinearColor(1.f,0.f,1.f));
+				
+				FVector ToTargetWeaponLocation = (TargetWeaponLocation - CombatSphere.Center).GetUnsafeNormal();
+				UKismetSystemLibrary::DrawDebugCircle(GetWorld(), CombatSphere.Center, CombatSphere.W, 24, FLinearColor::Yellow, 0.f, 2.f, ToTargetWeaponLocation, FVector::CrossProduct(ToTargetWeaponLocation, SlashingPlane.GetSafeNormal()));
 			}
 		}
 	}
@@ -233,17 +238,34 @@ bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromMouse(APawn* Co
 	FVector WorldMouseLocation, WorldMouseDir;
 	if (UGameplayStatics::DeprojectScreenToWorld(this, MouseOnScreen, WorldMouseLocation, WorldMouseDir))
 	{
-		if (DetermineTargetWeaponLocationFromCursorOnCombatSphere(ControlledPawn, WorldMouseLocation, WorldMouseDir, TargetWeaponPosition))
+		if (!bSlashingPlaneIsLocked)
 		{
-			bMouseWasInCombatSphere = true;
-			return true;
+			// Try first to intersect mouse with combat sphere...
+			if (DetermineTargetWeaponLocationFromCursorOnCombatSphere(ControlledPawn, WorldMouseLocation, WorldMouseDir, TargetWeaponPosition))
+			{
+				bMouseWasInCombatSphere = true;
+				return true;
+			}
+			else //...if not, intersect with CombatPlane (origin shared with combat sphere, coplanar with camera plane)
+			{
+				FPlane CombatPlane = FPlane(CombatSphere.Center, -IAtlantisCombatInterface::Execute_GetCameraFacingDirection(ControlledPawn));
+				if (DetermineTargetWeaponLocationFromCursorOnPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, CombatPlane, TargetWeaponPosition))
+				{
+					//If this is the first time mouse has gone outside the CombatSphere, then switch if cursor trace goes to far or close side 
+					if (bMouseWasInCombatSphere) bSphereProjectionIsClose = !bSphereProjectionIsClose;
+					bMouseWasInCombatSphere = false;
+					return true;
+				}
+			}
 		}
-		else if (DetermineTargetWeaponLocationFromCursorOnCombatPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, TargetWeaponPosition))
+		else // Slashing plane is locked
 		{
-			//If this is the first time mouse has gone outside the CombatSphere, then switch if cursor trace goes to far or close side 
-			if (bMouseWasInCombatSphere) bSphereProjectionIsClose = !bSphereProjectionIsClose; 
-			bMouseWasInCombatSphere = false;
-			return true;
+			// TODO: Handle this better for slashing planes near perpendicular to camera
+			// I think this should be less about mouse plane intersections and more, where the target is now, how are you moving the mouse? In what direction?
+			if (DetermineTargetWeaponLocationFromCursorOnPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, SlashingPlane, TargetWeaponPosition))
+			{
+				return true;
+			}
 		}
 	}
 
@@ -267,16 +289,16 @@ bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnCombatS
 	return false;
 }
 
-//First finds where the cursor intersects the CombatPlane (normal parallel to camera, intersecting origin of combat sphere).
+//First finds where the cursor intersects the given Plane (normal parallel to camera, intersecting origin of combat sphere).
 //Next, we project the planar intersection onto the nearest point on the CombatSphere.
-bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnCombatPlane(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& OutPositionOnSphere /*Out*/)
+bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnPlane(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, const FPlane& Plane, FVector& OutPositionOnSphere /*Out*/)
 {
-	FPlane CombatPlane = FPlane(CombatSphere.Center, -IAtlantisCombatInterface::Execute_GetCameraFacingDirection(ControlledPawn));
+//	FPlane CombatPlane = FPlane(CombatSphere.Center, -IAtlantisCombatInterface::Execute_GetCameraFacingDirection(ControlledPawn));
 	FVector WeaponLocation = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
 
 	float T_Unused; //Unsued
 	FVector MousePositionOnPlane;
-	if (UKismetMathLibrary::LinePlaneIntersection(MouseWorldSpace, MouseWorldSpace + MouseWorldDir * HitResultTraceDistance, CombatPlane, T_Unused, MousePositionOnPlane))
+	if (UKismetMathLibrary::LinePlaneIntersection(MouseWorldSpace, MouseWorldSpace + MouseWorldDir * HitResultTraceDistance, Plane, T_Unused, MousePositionOnPlane))
 	{
 		// Get the location of the cursor if it were projected from the plane directly onto the nearest point on the combat sphere
 		const FVector CursorProjectedOnSphereRelative = (MousePositionOnPlane - CombatSphere.Center).GetUnsafeNormal() * CombatSphere.W;

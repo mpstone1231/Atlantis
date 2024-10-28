@@ -101,7 +101,7 @@ private:
 	bool GetMouseOnScreen(FVector2D& MousePosition /*Out*/);
 	bool DetermineTargetWeaponLocationFromMouse(APawn* ControlledPawn, const FVector2D& MouseOnScreen, FVector& TargetWeaponPosition /*Out*/);
 	bool DetermineTargetWeaponLocationFromCursorOnCombatSphere(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& MousePositionOnSphere /*Out*/);
-	bool DetermineTargetWeaponLocationFromCursorOnCombatPlane(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& OutPositionOnSphere /*Out*/);
+	bool DetermineTargetWeaponLocationFromCursorOnPlane(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, const FPlane& Plane, FVector& OutPositionOnSphere /*Out*/);
 
 	FPlane DetermineInputPlane(const FVector& InputPlaneOrigin);
 	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FVector& DisambiguatingAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
