@@ -88,3 +88,13 @@ FVector UMathHelperLibrary::ExtrapolateNewPointFromAngularMomentum(const FVector
 
 	return (Origin + RelativePoint);
 }
+
+bool UMathHelperLibrary::DetermineArclengthDistanceBetweenVectors(const FVector& A, const FVector& B, UPARAM(ref) float& OutArclength)
+{
+	if (A.IsNearlyZero() || B.IsNearlyZero()) return false;
+	
+	float AngularRotationAngle = FQuat::FindBetweenVectors(A, B).GetAngle();
+	OutArclength = AngularRotationAngle * A.Length();
+
+	return true;
+}

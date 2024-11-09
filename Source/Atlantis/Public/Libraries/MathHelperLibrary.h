@@ -33,5 +33,10 @@ public:
 	// Given an angular momentum, determine where one point will translate to.
 	UFUNCTION(BlueprintPure)
 	static FVector ExtrapolateNewPointFromAngularMomentum(const FVector& Origin, const FVector& Point, const FVector& AngularMomentum);
+
+	// Determines the arclength distance between two vectors on a sphere. Assumes tail of vectors A and B are at the sphere's origin.
+	// Vector A's radius is used to calculate the arclength, in the event A and B are not on the sphere's surface.
+	UFUNCTION(BlueprintPure)
+	static bool DetermineArclengthDistanceBetweenVectors(const FVector& A, const FVector& B, UPARAM(ref) float& OutArclength);
 };
 

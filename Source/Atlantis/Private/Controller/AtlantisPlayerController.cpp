@@ -18,6 +18,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GameFramework/HUD.h"
 #include "Libraries/MathHelperLibrary.h"
+//#include "Curves/CurveFloat.h"
 
 AAtlantisPlayerController::AAtlantisPlayerController()
 {
@@ -61,15 +62,17 @@ void AAtlantisPlayerController::Tick(float DeltaSeconds)
 				UpdateSlashingPlane(WeaponLocation, TargetWeaponLocation);
 			}
 			
-			//Takes in MouseMotion right now, but doesn't do anything yet. Just sets weapon locaiton to target weapon location
+			//Takes in MouseMotion right now, but doesn't do anything yet. Just sets weapon location to target weapon location
 			IAtlantisCombatInterface::Execute_HandleCombatInputMouseMotion(ControlledPawn, TargetWeaponLocation, MouseMotion);
 
-			/* Update Cursor Location
-			FVector2D UpdatedScreenPosition;
-			if (UGameplayStatics::ProjectWorldToScreen(this, TargetWeaponLocation, UpdatedScreenPosition))
+			// Update Cursor Location
+			FVector2D UpdatedScreenPositionTarget;
+			if (UGameplayStatics::ProjectWorldToScreen(this, TargetWeaponLocation, UpdatedScreenPositionTarget))
 			{
+				FVector2D UpdatedScreenPosition = FVector2D(FMath::Lerp(MousePositionScreen.X, UpdatedScreenPositionTarget.X, MouseLerpAlpha), FMath::Lerp(MousePositionScreen.Y, UpdatedScreenPositionTarget.Y, MouseLerpAlpha));
 				SetMouseLocation(UpdatedScreenPosition.X, UpdatedScreenPosition.Y);
-			}*/
+				//SetMouseLocation(UpdatedScreenPositionTarget.X, UpdatedScreenPositionTarget.Y);
+			}
 
 			if (bDrawDebug)
 			{
@@ -238,42 +241,58 @@ bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromMouse(APawn* Co
 	FVector WorldMouseLocation, WorldMouseDir;
 	if (UGameplayStatics::DeprojectScreenToWorld(this, MouseOnScreen, WorldMouseLocation, WorldMouseDir))
 	{
-		if (!bSlashingPlaneIsLocked)
+	//	if (!bSlashingPlaneIsLocked)
+	//	{
+		// Try first to intersect mouse with combat sphere...
+		if (DetermineTargetWeaponLocationFromCursorOnCombatSphere(ControlledPawn, MouseOnScreen, WorldMouseLocation, WorldMouseDir, TargetWeaponPosition))
 		{
-			// Try first to intersect mouse with combat sphere...
-			if (DetermineTargetWeaponLocationFromCursorOnCombatSphere(ControlledPawn, WorldMouseLocation, WorldMouseDir, TargetWeaponPosition))
+			bMouseWasInCombatSphere = true;
+				
+		}
+		else //...if not, intersect with CombatPlane (origin shared with combat sphere, coplanar with camera plane)
+		{
+			FPlane CombatPlane = FPlane(CombatSphere.Center, -IAtlantisCombatInterface::Execute_GetCameraFacingDirection(ControlledPawn));
+			if (DetermineTargetWeaponLocationFromCursorOnPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, CombatPlane, TargetWeaponPosition))
 			{
-				bMouseWasInCombatSphere = true;
-				return true;
+				//If this is the first time mouse has gone outside the CombatSphere, then switch if cursor trace goes to far or close side 
+				if (bMouseWasInCombatSphere) bSphereProjectionIsClose = !bSphereProjectionIsClose;
+				bMouseWasInCombatSphere = false;
 			}
-			else //...if not, intersect with CombatPlane (origin shared with combat sphere, coplanar with camera plane)
+			else
 			{
-				FPlane CombatPlane = FPlane(CombatSphere.Center, -IAtlantisCombatInterface::Execute_GetCameraFacingDirection(ControlledPawn));
-				if (DetermineTargetWeaponLocationFromCursorOnPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, CombatPlane, TargetWeaponPosition))
-				{
-					//If this is the first time mouse has gone outside the CombatSphere, then switch if cursor trace goes to far or close side 
-					if (bMouseWasInCombatSphere) bSphereProjectionIsClose = !bSphereProjectionIsClose;
-					bMouseWasInCombatSphere = false;
-					return true;
-				}
+				return false; //Should never get to this branch
 			}
 		}
-		else // Slashing plane is locked
-		{
+
+		//If the slashing plane is locked, take where we wanted to set the target weapon position and find its closest point on the slashing circle
+		//TODO: Would we ever want to make it so if slashing plane is locked, we can move weapon anywhere on the plane? More control?
+	//	if (bSlashingPlaneIsLocked)
+	//	{
+			//TODO: This works somehwat well, but has some counterintuitive ways of working out in some places... I think if plane is locked, sphere intersection is going to have to work
+			// such that the far or short intersection is decided based on proximity to current position? Like: Close intersection and far intersection projected onto sphere, which is closer
+			// (arclength or absolute? Would it matter?) Or, instead of sphere intersection... Do we do plane intersection as before and... something else?
+	//		if (TransformPointOntoSlashingPlane(TargetWeaponPosition)) return true;
+	//		else return false;
+	//	}
+
+		return true;
+	//	}
+	//	else // Slashing plane is locked
+	//	{
 			// TODO: Handle this better for slashing planes near perpendicular to camera
 			// I think this should be less about mouse plane intersections and more, where the target is now, how are you moving the mouse? In what direction?
-			if (DetermineTargetWeaponLocationFromCursorOnPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, SlashingPlane, TargetWeaponPosition))
-			{
-				return true;
-			}
-		}
+	//		if (DetermineTargetWeaponLocationFromCursorOnPlane(ControlledPawn, WorldMouseLocation, WorldMouseDir, SlashingPlane, TargetWeaponPosition))
+	//		{
+	//			return true;
+	//		}
+	//	}
 	}
 
 	return false;
 }
 
 //If a trace from the cursor intersects the CombatSphere, passes out the intersection closest to the camera
-bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnCombatSphere(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& MousePositionOnSphere /*Out*/)
+bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnCombatSphere(APawn* ControlledPawn, const FVector2D& MouseOnScreen, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& MousePositionOnSphere /*Out*/)
 {
 	// TODO! After drawing debug spheres, try and go back to using the intersection with closest geodesic distance to weapon location, and if intersecting with sphere set cursor to weapon location,
 	// if intersecting with plane, ignore
@@ -282,8 +301,25 @@ bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnCombatS
 	const FVector WeaponLocation = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
 	if (UMathHelperLibrary::LineSphereIntersection(MouseWorldSpace, MouseWorldDir, CombatSphere, MouseOnSphereClose, MouseOnSphereFar, T1, T2))
 	{
-		MousePositionOnSphere = bSphereProjectionIsClose ? MouseOnSphereClose : MouseOnSphereFar;//FindSimpleBestSphereIntersectionAsInput(ControlledPawn, CombatSphere, WeaponLocation, MouseOnSphereClose, MouseOnSphereFar);
-		return true;
+		if (!bSlashingPlaneIsLocked)
+		{
+			MousePositionOnSphere = bSphereProjectionIsClose ? MouseOnSphereClose : MouseOnSphereFar;//FindSimpleBestSphereIntersectionAsInput(ControlledPawn, CombatSphere, WeaponLocation, MouseOnSphereClose, MouseOnSphereFar);
+			return true;
+		}
+		else
+		{
+			FVector MouseOnSlashingPlaneClose = MouseOnSphereClose;
+			FVector MouseOnSlashingPlaneFar = MouseOnSphereFar;
+			if (TransformPointOntoSlashingPlane(MouseOnSlashingPlaneClose) && TransformPointOntoSlashingPlane(MouseOnSlashingPlaneFar))
+			{
+				FVector CurrentWeaponLocation = IAtlantisCombatInterface::Execute_GetWeaponLocation(ControlledPawn);
+				// TODO: Consider using this even if plane isn't locked?
+				MousePositionOnSphere = DetermineSphereIntersectionToUseFromScore(MouseOnScreen, CurrentWeaponLocation, MouseOnSlashingPlaneClose, MouseOnSlashingPlaneFar);
+				return true;
+			}
+			return false;
+		}
+		
 	}
 	
 	return false;
@@ -304,11 +340,163 @@ bool AAtlantisPlayerController::DetermineTargetWeaponLocationFromCursorOnPlane(A
 		const FVector CursorProjectedOnSphereRelative = (MousePositionOnPlane - CombatSphere.Center).GetUnsafeNormal() * CombatSphere.W;
 	
 		OutPositionOnSphere = CombatSphere.Center + CursorProjectedOnSphereRelative;
+		if (bSlashingPlaneIsLocked)
+		{
+			//	TODO: This works somehwat well, but has some counterintuitive ways of working out in some places... I think if plane is locked, sphere intersection is going to have to work
+			//	 such that the far or short intersection is decided based on proximity to current position? Like: Close intersection and far intersection projected onto sphere, which is closer
+			//	 (arclength or absolute? Would it matter?) Or, instead of sphere intersection... Do we do plane intersection as before and... something else?
+			if (TransformPointOntoSlashingPlane(OutPositionOnSphere)) return true;
+			else return false;
+		}
 		return true;
 	}
 
 	return false;
 }
+
+// Takes a point on the combat sphere and finds the nearest point on the slashing plane circle
+bool AAtlantisPlayerController::TransformPointOntoSlashingPlane(FVector& PointToTransformOntoSlashingPlane)
+{
+	FVector CombatSphereToPoint = PointToTransformOntoSlashingPlane - CombatSphere.Center;
+	FVector ToTargetWeaponOnSlashingPlane = FVector::VectorPlaneProject(CombatSphereToPoint, SlashingPlane.GetSafeNormal());
+	if (!ToTargetWeaponOnSlashingPlane.IsNearlyZero(UE_KINDA_SMALL_NUMBER))
+	{
+		PointToTransformOntoSlashingPlane = CombatSphere.Center + ToTargetWeaponOnSlashingPlane.GetUnsafeNormal() * CombatSphere.W;
+		return true;
+	}
+	return false;
+}
+
+// Uses the two sphere intersections, current weapon location, and mouse postion on screen to determine which intersection makes the most sense to use for the target weapon position
+// This is determined by calculating a hand-tuned score, with the goal of making target weapon location be the place the player would naturally expect it to be and follow their intention
+FVector AAtlantisPlayerController::DetermineSphereIntersectionToUseFromScore(const FVector2D& MouseOnScreen, const FVector& CurrentWeaponLocation, const FVector& SlashingPlaneClose, const FVector& SlashingPlaneFar)
+{
+	//TODO: Calculate score using information such as intersection deprojected to screen distance from mouse on screen, proximity to current weapon position (arc distance?)... anything else?
+	float CloseScreenDistScore = ScreenDistanceScoreFactor ? ScreenDistanceScoreFactor : 0.f;
+	float FarScreenDistScore = ScreenDistanceScoreFactor ? 0.f : ScreenDistanceScoreFactor;
+	
+	// Calculate score based on proximity of target points to cursor (on screen space)
+	FVector2D SlashCloseScreen, SlashFarScreen;
+	if (UGameplayStatics::ProjectWorldToScreen(this, SlashingPlaneClose, SlashCloseScreen) && UGameplayStatics::ProjectWorldToScreen(this, SlashingPlaneFar, SlashFarScreen))
+	{
+		// Get screen space distances to cursor, and normalize their distances to a score
+		// Consideration, have some EditDefaultsOnly that adjusts the normalizes scores so some things have more bearings than others
+		// Another Idea! Blend point BETWEEN intersections based on score?
+		const float ScreenDistToClose = FVector2D::Distance(MouseOnScreen, SlashCloseScreen);
+		const float ScreenDistToFar = FVector2D::Distance(MouseOnScreen, SlashFarScreen);
+		const float ScreenScoreNormalizer = ScreenDistToFar + ScreenDistToClose;
+
+		// TODO: Make this scoring function into some math helper function!
+
+		if (ScreenScoreNormalizer > UE_KINDA_SMALL_NUMBER)
+		{
+			// TODO: Calculate Close/Far dist score so it increases substantially as proximity increases... and bring back blending, remove cursor lerping...
+			// Want to see if that will help kill the blending causing movement even when mouse doesn't move (when mouse returns to current location, that will
+			// help the score settle when not moving... in fact, maybe even get rid of world space dist score?
+
+			// TODO: Critical radius is when the score is max, not 1?
+			const float CloseScreenDistScoreInterim = (ScreenDistToClose / ScreenScoreNormalizer) / ScreenSpaceScoreCriticalRadius;//1.f - (ScreenDistToClose / ScreenScoreNormalizer);
+			const float FarScreenDistScoreInterim = (ScreenDistToFar / ScreenScoreNormalizer) / ScreenSpaceScoreCriticalRadius; //1.f - (ScreenDistToFar / ScreenScoreNormalizer);
+
+			if (CloseScreenDistScoreInterim < (1.f / ScreenDistanceScoreFactor))
+			{
+				CloseScreenDistScore = ScreenDistanceScoreFactor;
+			}
+			else
+			{
+				CloseScreenDistScore = 1.f / CloseScreenDistScoreInterim;
+			}
+
+			if (FarScreenDistScoreInterim < (1.f / ScreenDistanceScoreFactor))
+			{
+				FarScreenDistScore = ScreenDistanceScoreFactor;
+			}
+			else
+			{
+				FarScreenDistScore = 1.f / FarScreenDistScoreInterim;
+			}
+		}
+	}
+
+	// Calculate scopre based on proximity of target points to current weapon position (world space) 
+	
+	// This is linear distance... use arclength distance?
+	//const float WorldDistToClose = FVector::Distance(CurrentWeaponLocation, SlashingPlaneClose);
+	//const float WorldDistToFar = FVector::Distance(CurrentWeaponLocation, SlashingPlaneFar);
+
+	const FVector ToCurrentWeaponLocation = CurrentWeaponLocation - CombatSphere.Center;
+	FVector ToSlashingPlaneClose = SlashingPlaneClose - CombatSphere.Center;
+	FVector ToSlashingPlaneFar = SlashingPlaneFar - CombatSphere.Center;
+
+	float RadialDistClose = FQuat::FindBetweenVectors(ToCurrentWeaponLocation, ToSlashingPlaneClose).GetAngle();
+	float RadialDistFar = FQuat::FindBetweenVectors(ToCurrentWeaponLocation, ToSlashingPlaneFar).GetAngle();
+	const float WorldScoreNormalizer = RadialDistClose + RadialDistFar;
+
+	float CloseWorldDistScore = bSphereProjectionIsClose ? 1.f : 0.f;
+	float FarWorldDistScore = bSphereProjectionIsClose ? 0.f : 1.f;
+	if (WorldScoreNormalizer > UE_KINDA_SMALL_NUMBER)
+	{
+		CloseWorldDistScore = 1.f - (RadialDistClose / WorldScoreNormalizer);
+		FarWorldDistScore = 1.f - (RadialDistFar / WorldScoreNormalizer);
+	}
+
+	// Final scoring
+//	CloseScreenDistScore *= ScreenDistanceScoreFactor;
+//	FarScreenDistScore *= ScreenDistanceScoreFactor;
+
+	CloseWorldDistScore *= ToCurrentWeaponDistanceScoreFactor;
+	FarWorldDistScore *= ToCurrentWeaponDistanceScoreFactor;
+
+	const float CloseScore = CloseScreenDistScore + CloseWorldDistScore;
+	const float FarScore = FarScreenDistScore + FarWorldDistScore;
+
+	if (CloseScore > FarScore)
+	{
+		bSphereProjectionIsClose = true;
+		return SlashingPlaneClose;
+	}
+	else
+	{
+		bSphereProjectionIsClose = false;
+		return SlashingPlaneFar;
+	}
+
+	/*
+	if (CloseScore >= FarScore + SphereIntersectionScoreBlendRange/2.f)
+	{
+		bSphereProjectionIsClose = true;
+		return SlashingPlaneClose;
+	}
+	else if (CloseScore <= FarScore - SphereIntersectionScoreBlendRange/2.f)
+	{
+		bSphereProjectionIsClose = false;
+		return SlashingPlaneFar;
+	}
+	else //Scores are close enough that we should blend the two results
+	{
+		float BlendAlpha = ((FarScore - CloseScore) + SphereIntersectionScoreBlendRange / 2.f) / SphereIntersectionScoreBlendRange;
+		FVector RetVector = CombatSphere.Center + FVector::SlerpVectorToDirection(ToSlashingPlaneClose, ToSlashingPlaneFar, BlendAlpha);
+
+		APawn* ControlledPawn = GetPawn();
+		if (ControlledPawn && ControlledPawn->Implements<UAtlantisCombatInterface>())
+		{
+			FVector CameraDir = IAtlantisCombatInterface::Execute_GetCameraFacingDirection(ControlledPawn);
+			if (FVector::DotProduct(RetVector - CombatSphere.Center, CameraDir) < 0.f)
+			{
+				bSphereProjectionIsClose = true;
+			}
+			else
+			{
+				bSphereProjectionIsClose = false;
+			}
+		}
+
+		return RetVector;
+
+	}*/
+	
+}
+
 
 // INPUT SYSTEM
 

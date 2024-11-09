@@ -12,6 +12,7 @@ class UNiagaraSystem;
 class UInputMappingContext;
 class UInputAction;
 struct FInputActionInstance;
+//class UCurveFloat;
 
 
 UCLASS()
@@ -88,6 +89,18 @@ protected:
 	UPROPERTY(EditDefaultsOnly)
 	float DisambiguationAlpha = 0.5f;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Sphere Interaction")
+	float ScreenDistanceScoreFactor = 1.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Sphere Interaction")
+	float ScreenSpaceScoreCriticalRadius = 15.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Sphere Interaction")
+	float ToCurrentWeaponDistanceScoreFactor = 1.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Feel")
+	float MouseLerpAlpha = 0.2f;
+
 	UPROPERTY(EditDefaultsOnly)
 	bool bDrawDebug = false;
 
@@ -100,8 +113,10 @@ private:
 	/* Combat Input */
 	bool GetMouseOnScreen(FVector2D& MousePosition /*Out*/);
 	bool DetermineTargetWeaponLocationFromMouse(APawn* ControlledPawn, const FVector2D& MouseOnScreen, FVector& TargetWeaponPosition /*Out*/);
-	bool DetermineTargetWeaponLocationFromCursorOnCombatSphere(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& MousePositionOnSphere /*Out*/);
+	bool DetermineTargetWeaponLocationFromCursorOnCombatSphere(APawn* ControlledPawn, const FVector2D& MouseOnScreen, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, FVector& MousePositionOnSphere /*Out*/);
 	bool DetermineTargetWeaponLocationFromCursorOnPlane(APawn* ControlledPawn, const FVector& MouseWorldSpace, const FVector& MouseWorldDir, const FPlane& Plane, FVector& OutPositionOnSphere /*Out*/);
+	bool TransformPointOntoSlashingPlane(FVector& PointToTransformOntoSlashingPlane);
+	FVector DetermineSphereIntersectionToUseFromScore(const FVector2D& MouseOnScreen, const FVector& CurrentWeaponLocation, const FVector& SlashingPlaneClose, const FVector& SlashingPlaneFar);
 
 	FPlane DetermineInputPlane(const FVector& InputPlaneOrigin);
 	bool ProjectRadialAndLatitudinalAxesOntoInputSpace(const FVector& WeaponRadialAxis, const FVector& WeaponLatitudinalAxis, const FVector& DisambiguatingAxis, const FPlane& InputSpace, FVector& InputRadialAxis, FVector& InputLatitudinalAxis);
@@ -113,6 +128,8 @@ private:
 	FSphere CombatSphere = FSphere();
 	float CombatSphereHeight = 0.f;
 	float CombatSphereRadius = 1.f;
+	float SphereIntersectionScoreBlendRange = 0.2f;
+	//UCurveFloat* IntersectionBlendCurve;
 
 	FVector2D MouseMotion = FVector2D::ZeroVector;
 	FVector2D PrevMousePosition = FVector2D(-1.f, -1.f);
